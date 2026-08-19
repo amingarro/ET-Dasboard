@@ -5,30 +5,21 @@ import { pathToFileURL } from "node:url";
 import { defaultServices } from "./services";
 import { getStore, type StoreSchema } from "./store";
 
-// Electron's Tray (AppIndicator/StatusNotifierItem) is unreliable as a native
-// Wayland client on GNOME even with the ubuntu-appindicators extension
-// installed — force XWayland compatibility mode, which has much more mature
-// support for it. `--ozone-platform-hint` doesn't exist in this Electron
-// build (checked via `strings` on the binary — only plain `--ozone-platform`
-// is there), so this needs the real flag, and ideally passed on the actual
-// command line before the process starts (see the `--ozone-platform=x11` arg
-// in the `dev:electron` npm script) rather than relying on this call, which
-// runs too late in Chromium's own startup to reliably take effect. Kept as a
-// best-effort fallback for launch paths that don't go through that script —
-// packaging (`npm run dist`) will need the same flag wired in eventually.
-if (process.platform === "linux") {
-  app.commandLine.appendSwitch("ozone-platform", "x11");
-
-  // The packaged .deb crashed on first launch with a SIGSEGV inside Mesa's
-  // libGLESv2 (null pointer deref in the GPU process) — Ubuntu's own crash
-  // reporter flagged mismatched/outdated mesa userspace packages
-  // (libgbm1/mesa-libgallium/etc.) on the machine that hit it. Rather than
-  // depend on every user's system having a working Mesa/DRI stack, just
-  // don't touch the GPU at all on Linux: software rendering is slower but
-  // can't segfault the same way, and this app is mostly static UI + webviews,
-  // not something that needs GPU compositing.
-  app.disableHardwareAcceleration();
-}
+// Forcing XWayland compatibility mode (--ozone-platform=x11) was tried here
+// to fix the Tray icon not showing under native Wayland on GNOME. It did fix
+// the tray, but on a hybrid-GPU laptop (Intel iGPU + NVIDIA dGPU, confirmed
+// via `lspci`) it also either (a) segfaulted in Mesa's libGLESv2 during GPU
+// process init with hardware acceleration on, or (b) with acceleration
+// forced off, made the X11 software bitmap presenter fail
+// ("XGetWindowAttributes failed for window N") so the window process runs
+// but nothing ever paints — silently invisible, no window, no tray. Neither
+// combination is usable. Priority is a visible, working window over the
+// tray icon, so this no longer touches ozone-platform at all — Electron
+// auto-detects native Wayland on this session, which sidesteps the X11
+// presenter code path entirely. Revisit the tray-under-Wayland problem
+// separately (and check the render node — /dev/dri/renderD129 vs the
+// Intel/NVIDIA split — before touching GPU flags again) rather than
+// reintroducing this tradeoff.
 
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
