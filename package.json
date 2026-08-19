@@ -35,7 +35,6 @@
     "linux": {
       "icon": "build/icon.png",
       "category": "Network",
-      "desktopName": "et-dashboard.desktop",
       "target": [
         "AppImage",
         "deb"
