@@ -18,6 +18,16 @@ import { getStore, type StoreSchema } from "./store";
 // packaging (`npm run dist`) will need the same flag wired in eventually.
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("ozone-platform", "x11");
+
+  // The packaged .deb crashed on first launch with a SIGSEGV inside Mesa's
+  // libGLESv2 (null pointer deref in the GPU process) — Ubuntu's own crash
+  // reporter flagged mismatched/outdated mesa userspace packages
+  // (libgbm1/mesa-libgallium/etc.) on the machine that hit it. Rather than
+  // depend on every user's system having a working Mesa/DRI stack, just
+  // don't touch the GPU at all on Linux: software rendering is slower but
+  // can't segfault the same way, and this app is mostly static UI + webviews,
+  // not something that needs GPU compositing.
+  app.disableHardwareAcceleration();
 }
 
 const isDev = !app.isPackaged;
