@@ -1,11 +1,19 @@
-import { Mail, GitBranch, GitCompareArrows, Kanban, Clock, type LucideIcon } from "lucide-react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { faClock } from "@fortawesome/free-solid-svg-icons";
+import {
+  faAtlassian,
+  faBitbucket,
+  faGithub,
+  faGoogle,
+  faTrello,
+} from "@fortawesome/free-brands-svg-icons";
 
 export interface ServiceDefinition {
   id: string;
   name: string;
   url: string;
   partition: string;
-  icon: LucideIcon;
+  icon: IconDefinition;
   color: string;
 }
 
@@ -15,7 +23,7 @@ export const SERVICE_DEFINITIONS: ServiceDefinition[] = [
     name: "Gmail",
     url: "https://mail.google.com/mail/u/0/",
     partition: "persist:gmail",
-    icon: Mail,
+    icon: faGoogle,
     color: "#ea4335",
   },
   {
@@ -23,15 +31,15 @@ export const SERVICE_DEFINITIONS: ServiceDefinition[] = [
     name: "GitHub",
     url: "https://github.com",
     partition: "persist:github",
-    icon: GitBranch,
-    color: "#6e7781",
+    icon: faGithub,
+    color: "#181717",
   },
   {
     id: "bitbucket",
     name: "Bitbucket",
     url: "https://bitbucket.org",
     partition: "persist:bitbucket",
-    icon: GitCompareArrows,
+    icon: faBitbucket,
     color: "#0052cc",
   },
   {
@@ -39,7 +47,7 @@ export const SERVICE_DEFINITIONS: ServiceDefinition[] = [
     name: "Trello",
     url: "https://trello.com/u/amingarro/boards",
     partition: "persist:trello",
-    icon: Kanban,
+    icon: faTrello,
     color: "#0079bf",
   },
   {
@@ -47,8 +55,18 @@ export const SERVICE_DEFINITIONS: ServiceDefinition[] = [
     name: "Harvest",
     url: "https://kurobits.harvestapp.com/time",
     partition: "persist:harvest",
-    icon: Clock,
-    color: "#fa5751",
+    // Harvest has no Font Awesome brand mark — fall back to a generic
+    // time-tracking glyph in the product's own brand color.
+    icon: faClock,
+    color: "#fa5b0f",
+  },
+  {
+    id: "atlassian",
+    name: "Jira",
+    url: "https://start.atlassian.com/",
+    partition: "persist:atlassian",
+    icon: faAtlassian,
+    color: "#2684ff",
   },
 ];
 

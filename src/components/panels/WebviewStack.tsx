@@ -1,16 +1,118 @@
 "use client";
 
-import { useCallback, useMemo, useState, type CSSProperties } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import type { Layout } from "react-resizable-panels";
-import { getServiceDefinition } from "@/lib/services";
+import { getServiceDefinition, type ServiceDefinition } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import { SplitLayout } from "./SplitLayout";
 
 const GAP = 5;
+const RADIUS = 12;
+
+type Corner = "tl" | "tr" | "bl" | "br";
+const CORNERS: Corner[] = ["tl", "tr", "bl", "br"];
+
+const MASK_ORIGIN: Record<Corner, string> = {
+  tl: "100% 100%",
+  tr: "0% 100%",
+  bl: "100% 0%",
+  br: "0% 0%",
+};
+
+function maskGradient(corner: Corner): string {
+  return `radial-gradient(circle at ${MASK_ORIGIN[corner]}, transparent 0, transparent ${RADIUS}px, black ${RADIUS}px, black 100%)`;
+}
+
+/** Corner mask position when the webview fills the container minus a fixed GAP
+ * on every side — doesn't need the container's own size, just CSS edges. */
+function fullscreenCornerPosition(corner: Corner): CSSProperties {
+  const vertical = corner === "tl" || corner === "tr" ? { top: GAP } : { bottom: GAP };
+  const horizontal = corner === "tl" || corner === "bl" ? { left: GAP } : { right: GAP };
+  return { ...vertical, ...horizontal };
+}
+
+/** Corner mask position from a measured split-panel rect — all in the same
+ * top/left coordinate space as WebviewStack's own root (see SplitLayout). */
+function splitCornerPosition(corner: Corner, rect: DOMRect): CSSProperties {
+  const top = corner === "tl" || corner === "tr" ? rect.top + GAP : rect.top + rect.height - GAP - RADIUS;
+  const left = corner === "tl" || corner === "bl" ? rect.left + GAP : rect.left + rect.width - GAP - RADIUS;
+  return { top, left };
+}
+
+interface IpcMessageEvent extends Event {
+  channel: string;
+  args: unknown[];
+}
+
+interface ServiceWebviewProps {
+  service: ServiceDefinition;
+  style: CSSProperties;
+  isVisible: boolean;
+  preloadPath?: string;
+  notificationsEnabled: boolean;
+}
+
+function ServiceWebview({
+  service,
+  style,
+  isVisible,
+  preloadPath,
+  notificationsEnabled,
+}: ServiceWebviewProps) {
+  const ref = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    function handleIpcMessage(e: Event) {
+      const event = e as IpcMessageEvent;
+      if (event.channel !== "app-notification") return;
+      if (!notificationsEnabled) return;
+      const payload = event.args[0] as { title: string; body: string };
+      window.electronAPI.showNotification({
+        serviceId: service.id,
+        title: payload.title,
+        body: payload.body,
+      });
+    }
+
+    el.addEventListener("ipc-message", handleIpcMessage);
+    return () => el.removeEventListener("ipc-message", handleIpcMessage);
+  }, [service.id, notificationsEnabled]);
+
+  return (
+    <webview
+      ref={ref}
+      src={service.url}
+      partition={service.partition}
+      preload={preloadPath}
+      className="absolute"
+      style={{
+        ...style,
+        visibility: isVisible ? "visible" : "hidden",
+        pointerEvents: isVisible ? "auto" : "none",
+      }}
+    />
+  );
+}
 
 export function WebviewStack() {
   const { state, update } = useStore();
   const [rects, setRects] = useState<Record<string, DOMRect>>({});
+  const [preloadPath, setPreloadPath] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    window.electronAPI.getWebviewPreloadPath().then(setPreloadPath);
+  }, []);
 
   const enabledServices = useMemo(
     () =>
@@ -74,7 +176,15 @@ export function WebviewStack() {
         const splitRect = isSplit && panelIds.includes(service.id) ? rects[service.id] : undefined;
         const isVisible = isFullscreenActive || Boolean(splitRect);
 
-        const style: CSSProperties = isFullscreenActive
+        // The webview itself stays an unclipped rectangle — Electron's <webview>
+        // corrupts its own rendering when clipped via border-radius or an
+        // overflow:hidden ancestor (tried, broke page loads). The rounded look
+        // instead comes from plain sibling overlays painted on top: 4 small corner
+        // masks (radial-gradient punching a quarter-circle hole, background-colored
+        // everywhere else) hide the webview's square corners, and a transparent
+        // bordered div draws the rounded outline. Neither touches the webview's own
+        // box, so neither can trigger that bug.
+        const webviewStyle: CSSProperties = isFullscreenActive
           ? {
               top: GAP,
               left: GAP,
@@ -90,18 +200,46 @@ export function WebviewStack() {
               }
             : { top: 0, left: 0, width: 0, height: 0 };
 
+        const frameStyle: CSSProperties = isFullscreenActive
+          ? { top: GAP, left: GAP, right: GAP, bottom: GAP }
+          : { ...webviewStyle };
+
         return (
-          <webview
-            key={service.id}
-            src={service.url}
-            partition={service.partition}
-            className="absolute rounded-xl border border-base-300"
-            style={{
-              ...style,
-              visibility: isVisible ? "visible" : "hidden",
-              pointerEvents: isVisible ? "auto" : "none",
-            }}
-          />
+          <Fragment key={service.id}>
+            <ServiceWebview
+              service={service}
+              style={webviewStyle}
+              isVisible={isVisible}
+              preloadPath={preloadPath}
+              notificationsEnabled={
+                state.services.find((s) => s.id === service.id)?.notificationsEnabled ?? true
+              }
+            />
+
+            {isVisible && (
+              <>
+                <div
+                  className="pointer-events-none absolute rounded-xl border border-base-300"
+                  style={frameStyle}
+                />
+                {CORNERS.map((corner) => (
+                  <div
+                    key={corner}
+                    className="pointer-events-none absolute bg-base-300"
+                    style={{
+                      width: RADIUS,
+                      height: RADIUS,
+                      maskImage: maskGradient(corner),
+                      WebkitMaskImage: maskGradient(corner),
+                      ...(isFullscreenActive
+                        ? fullscreenCornerPosition(corner)
+                        : splitCornerPosition(corner, splitRect as DOMRect)),
+                    }}
+                  />
+                ))}
+              </>
+            )}
+          </Fragment>
         );
       })}
     </div>

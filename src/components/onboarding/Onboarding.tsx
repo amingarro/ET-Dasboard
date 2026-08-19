@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, GripVertical } from "lucide-react";
 import { SERVICE_DEFINITIONS, getServiceDefinition } from "@/lib/services";
+import { ServiceIcon } from "@/components/ServiceIcon";
 import { useDragReorder } from "@/lib/useDragReorder";
 import { useStore } from "@/lib/store";
 import type { StoreSchema } from "@/types/electron-api";
@@ -35,6 +36,7 @@ export function Onboarding() {
       id,
       enabled: enabled.has(id),
       order: index,
+      notificationsEnabled: true,
     }));
     const enabledIds = order.filter((id) => enabled.has(id));
 
@@ -71,7 +73,6 @@ export function Onboarding() {
             {order.map((id) => {
               const service = getServiceDefinition(id);
               if (!service) return null;
-              const Icon = service.icon;
               const isEnabled = enabled.has(service.id);
               const { isDragging, ...dragProps } = getItemProps(service.id);
               return (
@@ -95,7 +96,7 @@ export function Onboarding() {
                       onClick={() => toggleService(service.id)}
                       className="flex flex-1 items-center gap-3 py-2 text-left"
                     >
-                      <Icon size={20} color={service.color} className="shrink-0" />
+                      <ServiceIcon service={service} size={20} className="shrink-0" />
                       <span className="flex-1 font-medium">{service.name}</span>
                       {isEnabled && <Check size={18} className="text-primary" />}
                     </button>

@@ -10,4 +10,9 @@
 
 body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  /* Every top-level screen (loading/onboarding/Shell) paints its own
+     full-viewport bg-* — this stays transparent so the notification popup
+     window (frameless + transparent, see electron/main.ts) shows only its
+     rounded card instead of a solid rectangle behind it. */
+  background: transparent;
 }

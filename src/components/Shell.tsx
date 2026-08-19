@@ -7,24 +7,12 @@ import { Dock } from "@/components/dock/Dock";
 import { WebviewStack } from "@/components/panels/WebviewStack";
 import { Settings } from "@/components/settings/Settings";
 import { useStore } from "@/lib/store";
+import { useThemeSync } from "@/lib/useThemeSync";
 
 const HIDE_DELAY_MS = 350;
 const EDGE_HOVER_PX = 14;
 const DOCK_WIDTH_COMPACT = 64;
 const DOCK_WIDTH_EXPANDED = 224;
-
-function useThemeSync() {
-  const { state } = useStore();
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (state.theme === "system") {
-      root.removeAttribute("data-theme");
-    } else {
-      root.setAttribute("data-theme", state.theme);
-    }
-  }, [state.theme]);
-}
 
 function useDockReveal(pinBase: boolean, pinned: boolean) {
   const [hovering, setHovering] = useState(false);
@@ -53,8 +41,23 @@ function useDockReveal(pinBase: boolean, pinned: boolean) {
   return { revealed, show, scheduleHide };
 }
 
+function useNotificationClicks() {
+  const { state, update } = useStore();
+  const layout = state.layout;
+
+  useEffect(() => {
+    return window.electronAPI.onNotificationClick((serviceId) => {
+      const group = layout.groups.find((g) => g.serviceIds.includes(serviceId));
+      if (group) {
+        update({ layout: { ...layout, activeGroupId: group.id } });
+      }
+    });
+  }, [layout, update]);
+}
+
 export function Shell() {
   useThemeSync();
+  useNotificationClicks();
   const { state, loading } = useStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const activeGroup = state.layout.groups.find((g) => g.id === state.layout.activeGroupId);

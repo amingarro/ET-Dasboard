@@ -4,6 +4,7 @@ export interface ServiceConfig {
   id: string;
   enabled: boolean;
   order: number;
+  notificationsEnabled: boolean;
 }
 
 export interface ViewGroup {
@@ -40,6 +41,7 @@ const defaultStoreValues: StoreSchema = {
     id: service.id,
     enabled: true,
     order: index,
+    notificationsEnabled: true,
   })),
   layout: {
     groups: defaultServices.map((service) => soloGroup(service.id)),
@@ -129,6 +131,17 @@ export async function getStore(): Promise<AppStore> {
     }
     if (!current.dockMode) {
       storeInstance.set({ dockMode: "auto" });
+    }
+
+    // electron-store doesn't backfill missing fields on objects already
+    // persisted inside an array, so services saved before notificationsEnabled
+    // existed load without it.
+    const migratedServices = current.services.map((s) => ({
+      ...s,
+      notificationsEnabled: s.notificationsEnabled ?? true,
+    }));
+    if (JSON.stringify(migratedServices) !== JSON.stringify(current.services)) {
+      storeInstance.set({ services: migratedServices });
     }
   }
   return storeInstance;

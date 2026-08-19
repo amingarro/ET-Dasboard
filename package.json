@@ -5,7 +5,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev:next": "next dev",
-    "dev:electron": "wait-on http://localhost:3000 && electron .",
+    "dev:electron": "wait-on http://localhost:3000 && electron . --ozone-platform=x11",
     "dev": "npm run build:electron && concurrently -k -n NEXT,ELECTRON -c blue,magenta \"npm:dev:next\" \"npm:dev:electron\"",
     "build:electron": "tsc -p tsconfig.electron.json",
     "build": "next build && npm run build:electron",
@@ -22,6 +22,7 @@
     "files": [
       "dist-electron/**/*",
       "out/**/*",
+      "build/**/*",
       "package.json"
     ],
     "linux": {
@@ -47,6 +48,10 @@
     }
   },
   "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "^7.3.1",
+    "@fortawesome/free-brands-svg-icons": "^7.3.1",
+    "@fortawesome/free-solid-svg-icons": "^7.3.1",
+    "@fortawesome/react-fontawesome": "^3.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-store": "^11.0.2",

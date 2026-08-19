@@ -4,6 +4,7 @@ declare namespace JSX {
       src?: string;
       partition?: string;
       allowpopups?: string;
+      preload?: string;
     };
   }
 }

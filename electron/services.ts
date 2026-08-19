@@ -42,4 +42,11 @@ export const defaultServices: ServiceDefinition[] = [
     partition: "persist:harvest",
     headerStripDomains: ["kurobits.harvestapp.com", "id.getharvest.com"],
   },
+  {
+    id: "atlassian",
+    name: "Jira",
+    url: "https://start.atlassian.com/",
+    partition: "persist:atlassian",
+    headerStripDomains: ["atlassian.com", "atlassian.net", "id.atlassian.com"],
+  },
 ];

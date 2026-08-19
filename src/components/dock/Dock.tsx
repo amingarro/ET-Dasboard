@@ -2,15 +2,14 @@
 
 import { useRef, useState, type DragEvent, type ReactNode } from "react";
 import {
-  Moon,
   Settings as SettingsIcon,
   SplitSquareHorizontal,
   SplitSquareVertical,
-  Sun,
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { getServiceDefinition } from "@/lib/services";
+import { ServiceIcon } from "@/components/ServiceIcon";
 import { useStore } from "@/lib/store";
 import type { ViewGroup } from "@/types/electron-api";
 
@@ -30,6 +29,14 @@ export function Dock({ revealed, expanded, width, onOpenSettings, onMouseEnter, 
 
   const groups = state.layout.groups;
   const activeGroup = groups.find((g) => g.id === state.layout.activeGroupId);
+
+  function groupOrder(group: ViewGroup) {
+    return Math.min(
+      ...group.serviceIds.map((id) => state.services.find((s) => s.id === id)?.order ?? Infinity),
+    );
+  }
+
+  const orderedGroups = [...groups].sort((a, b) => groupOrder(a) - groupOrder(b));
 
   function activateGroup(id: string) {
     update({ layout: { ...state.layout, activeGroupId: id } });
@@ -81,11 +88,6 @@ export function Dock({ revealed, expanded, width, onOpenSettings, onMouseEnter, 
     update({ layout: { ...state.layout, groups: nextGroups } });
   }
 
-  function toggleTheme() {
-    const next = state.theme === "dark" ? "light" : "dark";
-    update({ theme: next });
-  }
-
   function handleDragStart(id: string) {
     draggedGroupIdRef.current = id;
   }
@@ -119,7 +121,7 @@ export function Dock({ revealed, expanded, width, onOpenSettings, onMouseEnter, 
       }`}
     >
       <ul className={`flex flex-1 flex-col gap-2 ${expanded ? "" : "items-center"}`}>
-        {groups.map((group) => (
+        {orderedGroups.map((group) => (
           <li key={group.id}>
             <GroupButton
               group={group}
@@ -153,14 +155,6 @@ export function Dock({ revealed, expanded, width, onOpenSettings, onMouseEnter, 
           }
         />
       )}
-
-      <DockAction
-        expanded={expanded}
-        title="Cambiar tema"
-        label={state.theme === "dark" ? "Tema claro" : "Tema oscuro"}
-        onClick={toggleTheme}
-        icon={state.theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
-      />
 
       <DockAction
         expanded={expanded}
@@ -237,16 +231,12 @@ function GroupButton({
 
   const icon = isGroup ? (
     <span className="grid shrink-0 grid-cols-2 gap-0.5">
-      {services.slice(0, 4).map((service) => {
-        const Icon = service.icon;
-        return <Icon key={service.id} size={12} />;
-      })}
+      {services.slice(0, 4).map((service) => (
+        <ServiceIcon key={service.id} service={service} size={12} />
+      ))}
     </span>
   ) : (
-    (() => {
-      const Icon = services[0].icon;
-      return <Icon size={20} className="shrink-0" />;
-    })()
+    <ServiceIcon service={services[0]} size={20} className="shrink-0" />
   );
 
   return (

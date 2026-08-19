@@ -2,6 +2,7 @@ export interface ServiceConfig {
   id: string;
   enabled: boolean;
   order: number;
+  notificationsEnabled: boolean;
 }
 
 export interface ViewGroup {
@@ -18,6 +19,12 @@ export interface LayoutState {
 
 export type DockMode = "expanded" | "compact" | "auto";
 
+export interface NotificationPayload {
+  serviceId: string;
+  title: string;
+  body: string;
+}
+
 export interface StoreSchema {
   onboarded: boolean;
   theme: "light" | "dark" | "system";
@@ -30,6 +37,12 @@ declare global {
   interface Window {
     electronAPI: {
       platform: string;
+      getWebviewPreloadPath: () => Promise<string>;
+      showNotification: (payload: NotificationPayload) => void;
+      onNotificationClick: (callback: (serviceId: string) => void) => () => void;
+      onNotificationData: (callback: (payload: NotificationPayload) => void) => () => void;
+      activateNotificationService: (serviceId: string) => void;
+      closeNotificationPopup: () => void;
       store: {
         getAll: () => Promise<StoreSchema>;
         set: (patch: Partial<StoreSchema>) => Promise<StoreSchema>;

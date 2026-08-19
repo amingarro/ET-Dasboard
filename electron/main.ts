@@ -1,11 +1,45 @@
-import { app, BrowserWindow, ipcMain, session } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, screen, session, Tray } from "electron";
 import path from "node:path";
 import fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import { defaultServices } from "./services";
 import { getStore, type StoreSchema } from "./store";
 
+// Electron's Tray (AppIndicator/StatusNotifierItem) is unreliable as a native
+// Wayland client on GNOME even with the ubuntu-appindicators extension
+// installed — force XWayland compatibility mode, which has much more mature
+// support for it. `--ozone-platform-hint` doesn't exist in this Electron
+// build (checked via `strings` on the binary — only plain `--ozone-platform`
+// is there), so this needs the real flag, and ideally passed on the actual
+// command line before the process starts (see the `--ozone-platform=x11` arg
+// in the `dev:electron` npm script) rather than relying on this call, which
+// runs too late in Chromium's own startup to reliably take effect. Kept as a
+// best-effort fallback for launch paths that don't go through that script —
+// packaging (`npm run dist`) will need the same flag wired in eventually.
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("ozone-platform", "x11");
+}
+
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
+
+interface NotificationPayload {
+  serviceId: string;
+  title: string;
+  body: string;
+}
+
+const POPUP_WIDTH = 360;
+const POPUP_HEIGHT = 100;
+const POPUP_MARGIN = 16;
+const POPUP_DURATION_MS = 6000;
+
+let notificationWindow: BrowserWindow | null = null;
+const notificationQueue: NotificationPayload[] = [];
+let notificationTimer: ReturnType<typeof setTimeout> | null = null;
+let notificationShowing = false;
 
 function stripFrameHeaders(ses: Electron.Session) {
   ses.webRequest.onHeadersReceived((details, callback) => {
@@ -47,7 +81,131 @@ function createWindow() {
     win.loadFile(path.join(__dirname, "../out/index.html"));
   }
 
+  // Closing the window minimizes to the tray instead of quitting — the tray's
+  // own "Salir" item (or Cmd/Ctrl+Q) is what actually exits the app.
+  win.on("close", (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    win.hide();
+  });
+
   return win;
+}
+
+function createTray(win: BrowserWindow) {
+  const iconPath = path.join(__dirname, "../build/tray-icon.png");
+  if (!fs.existsSync(iconPath)) {
+    console.log("[tray] icon not found at", iconPath, "— skipping tray creation");
+    return;
+  }
+
+  tray = new Tray(iconPath);
+  tray.setToolTip("ET Dashboard");
+  console.log("[tray] created");
+
+  function toggleWindow() {
+    if (win.isVisible()) {
+      win.hide();
+    } else {
+      win.show();
+      win.focus();
+    }
+  }
+
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: "Mostrar",
+        click: () => {
+          win.show();
+          win.focus();
+        },
+      },
+      { label: "Ocultar", click: () => win.hide() },
+      { type: "separator" },
+      {
+        label: "Salir",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+
+  tray.on("click", toggleWindow);
+}
+
+// A separate frameless, transparent, always-on-top window for notifications —
+// a native OS Notification can't be styled at all (fully OS-rendered), and an
+// in-page toast only exists while the main window is visible. This one is its
+// own window, so it shows up in the corner of the screen regardless of
+// whether the main window is hidden in the tray, like Discord/Slack toasts.
+// It's created once and reused (content + position updated, then
+// shown/hidden) rather than recreated per notification.
+function createNotificationWindow() {
+  const win = new BrowserWindow({
+    width: POPUP_WIDTH,
+    height: POPUP_HEIGHT,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    focusable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  if (isDev) {
+    win.loadURL("http://localhost:3000/notification");
+  } else {
+    win.loadFile(path.join(__dirname, "../out/notification.html"));
+  }
+
+  return win;
+}
+
+function positionNotificationWindow(win: BrowserWindow) {
+  const { workArea } = screen.getPrimaryDisplay();
+  win.setBounds({
+    x: workArea.x + workArea.width - POPUP_WIDTH - POPUP_MARGIN,
+    y: workArea.y + POPUP_MARGIN,
+    width: POPUP_WIDTH,
+    height: POPUP_HEIGHT,
+  });
+}
+
+function showNextNotification() {
+  if (notificationShowing || notificationQueue.length === 0 || !notificationWindow) return;
+  const payload = notificationQueue.shift();
+  if (!payload) return;
+
+  notificationShowing = true;
+  positionNotificationWindow(notificationWindow);
+  notificationWindow.webContents.send("notification-data", payload);
+  notificationWindow.showInactive();
+
+  notificationTimer = setTimeout(() => {
+    notificationWindow?.hide();
+    notificationShowing = false;
+    showNextNotification();
+  }, POPUP_DURATION_MS);
+}
+
+function dismissCurrentNotification() {
+  if (notificationTimer) {
+    clearTimeout(notificationTimer);
+    notificationTimer = null;
+  }
+  notificationWindow?.hide();
+  notificationShowing = false;
+  showNextNotification();
 }
 
 app.whenReady().then(async () => {
@@ -64,6 +222,26 @@ app.whenReady().then(async () => {
 
   const store = await getStore();
 
+  ipcMain.handle("get-webview-preload-path", () =>
+    pathToFileURL(path.join(__dirname, "webview-preload.js")).toString(),
+  );
+
+  ipcMain.on("show-notification", (_event, payload: NotificationPayload) => {
+    notificationQueue.push(payload);
+    showNextNotification();
+  });
+
+  ipcMain.on("activate-notification-service", (_event, serviceId: string) => {
+    mainWindow?.show();
+    mainWindow?.focus();
+    mainWindow?.webContents.send("notification-clicked", serviceId);
+    dismissCurrentNotification();
+  });
+
+  ipcMain.on("close-notification-popup", () => {
+    dismissCurrentNotification();
+  });
+
   ipcMain.handle("store:get-all", () => store.store);
   ipcMain.handle("store:set", (_event, patch: Partial<StoreSchema>) => {
     store.set(patch);
@@ -75,9 +253,20 @@ app.whenReady().then(async () => {
   });
 
   mainWindow = createWindow();
+  createTray(mainWindow);
+  notificationWindow = createNotificationWindow();
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      mainWindow = createWindow();
+    }
+  });
+
+  app.on("before-quit", () => {
+    isQuitting = true;
   });
 });
 
