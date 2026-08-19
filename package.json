@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "private": true,
   "description": "Gmail, GitHub, Bitbucket, Trello, Harvest y Jira en una sola ventana de escritorio.",
-  "author": "Andres Mingarro",
+  "author": "Andres Mingarro <amingarro@easytech.com.ar>",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev:next": "next dev",
@@ -35,6 +35,7 @@
     "linux": {
       "icon": "build/icon.png",
       "category": "Network",
+      "desktopName": "et-dashboard.desktop",
       "target": [
         "AppImage",
         "deb"
