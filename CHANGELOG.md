@@ -2,7 +2,7 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
-## [Sin publicar]
+## [0.1.11] - 2026-08-20
 
 - El botón "Actualizar" ahora baja el `.deb` nuevo y lo instala solo (con un permiso de administrador, como cualquier instalación de paquete) — antes solo abría la página de GitHub para descargarlo a mano.
 
