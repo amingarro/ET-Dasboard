@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
-import Image from "next/image";
 import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { motion } from "motion/react";
 import { getServiceDefinition } from "@/lib/services";
@@ -168,13 +167,12 @@ export function Dock({
         label="Configuración"
         onClick={onOpenSettings}
         icon={
-          <Image
-            src="/app-icon.png"
-            alt=""
-            width={22}
-            height={22}
-            className="shrink-0 rounded-md"
-          />
+          // Relative path (not next/image, which rejects relative src
+          // strings) — a root-absolute "/app-icon.png" 404s under the
+          // packaged app's file:// load. See notification/page.tsx for the
+          // full explanation.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="app-icon.png" alt="" width={22} height={22} className="shrink-0 rounded-md" />
         }
       />
     </motion.nav>

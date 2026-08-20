@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
 import { getServiceDefinition } from "@/lib/services";
@@ -38,7 +37,14 @@ export default function NotificationPopupPage() {
             className="flex w-full cursor-pointer items-start gap-3 rounded-2xl border border-base-300 bg-base-100 p-3 shadow-2xl shadow-black/40"
           >
             <div className="relative shrink-0">
-              <Image src="/app-icon.png" alt="" width={40} height={40} className="rounded-xl" />
+              {/* Plain <img> with a relative path, not next/image (which
+                  rejects relative src strings): under the packaged app's
+                  file:// load, a root-absolute "/app-icon.png" resolves to
+                  the filesystem root and 404s — a relative path resolves
+                  against out/notification.html's own directory instead,
+                  which is where the exported public/ files actually live. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="app-icon.png" alt="" width={40} height={40} className="rounded-xl" />
               {service && (
                 <div className="absolute -bottom-1.5 -right-1.5 rounded-full ring-2 ring-base-100">
                   <ServiceIcon service={service} size={14} />

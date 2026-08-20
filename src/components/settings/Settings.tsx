@@ -3,7 +3,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Bell, BellOff, GripVertical, RefreshCw, X } from "lucide-react";
 import { motion } from "motion/react";
-import Image from "next/image";
 import { SERVICE_DEFINITIONS, getServiceDefinition } from "@/lib/services";
 import { ServiceIcon } from "@/components/ServiceIcon";
 import { useDragReorder } from "@/lib/useDragReorder";
@@ -27,7 +26,7 @@ interface SettingsProps {
 
 export function Settings({ onClose }: SettingsProps) {
   const { state, update } = useStore();
-  const [updateState, setUpdateState] = useState<UpdateState>({ status: "idle" });
+  const [updateState, setUpdateState] = useState<UpdateState>({ status: "checking" });
 
   function checkForUpdates() {
     setUpdateState({ status: "checking" });
@@ -37,7 +36,9 @@ export function Settings({ onClose }: SettingsProps) {
   }
 
   useEffect(() => {
-    checkForUpdates();
+    window.electronAPI.checkForUpdates().then((result) => {
+      setUpdateState({ status: "done", result });
+    });
   }, []);
 
   function sendDummyNotification() {
@@ -164,7 +165,9 @@ export function Settings({ onClose }: SettingsProps) {
         <div className="card-body gap-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Image src="/app-icon.png" alt="" width={24} height={24} className="rounded-md" />
+              {/* Relative path, not next/image — see notification/page.tsx */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="app-icon.png" alt="" width={24} height={24} className="rounded-md" />
               <h2 className="text-xl font-bold">Configuración</h2>
             </div>
             <button
