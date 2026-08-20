@@ -278,6 +278,11 @@ function dismissCurrentNotification() {
 }
 
 app.whenReady().then(async () => {
+  // Removes Electron's default File/Edit/View/Window menu bar — this app has
+  // no use for it (no File/Edit actions of its own) and it also shows up on
+  // the detached DevTools window in dev.
+  Menu.setApplicationMenu(null);
+
   for (const service of defaultServices) {
     stripFrameHeaders(session.fromPartition(service.partition));
   }

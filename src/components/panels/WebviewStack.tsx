@@ -107,11 +107,12 @@ function ServiceWebview({
       src={service.url}
       partition={service.partition}
       preload={preloadPath}
-      className="absolute"
+      className="absolute transition-opacity duration-150 ease-out"
       style={{
         ...style,
         visibility: isVisible ? "visible" : "hidden",
         pointerEvents: isVisible ? "auto" : "none",
+        opacity: isVisible ? 1 : 0,
       }}
     />
   );

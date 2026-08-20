@@ -6,6 +6,12 @@ Todas las novedades importantes de ET Dashboard, versión por versión.
 
 - Corregido: el ícono de la app no se veía en Configuración, en el dock ni en las notificaciones de la versión instalada.
 - Corregido: el ícono de la app no aparecía en el dock/Actividades de GNOME ni en el Alt-Tab de la versión instalada en Linux.
+- Corregido: el brillo animado del botón "Buscar actualizaciones" se veía por encima del botón en vez de detrás.
+- El chequeo de actualizaciones ahora tarda al menos 3 segundos, para que el spinner se note antes de mostrar el resultado.
+- Transición suave al cambiar de página en el dock, en vez de un cambio abrupto.
+- Los botones del menú lateral ahora muestran el cursor de mano al pasar el mouse.
+- Se quitó la barra de menú (Archivo/Editar/Ver/Ventana) de la ventana de la app.
+- Se sacó el botón de prueba de notificaciones de Configuración.
 
 ## [0.1.6] - 2026-08-20
 

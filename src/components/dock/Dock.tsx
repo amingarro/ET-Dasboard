@@ -195,7 +195,7 @@ function DockAction({ expanded, title, label, icon, onClick }: DockActionProps) 
       onClick={onClick}
       whileTap={{ scale: 0.96 }}
       whileHover={{ scale: expanded ? 1 : 1.06 }}
-      className={`flex items-center gap-3 rounded-xl text-base-content/70 hover:bg-base-300 ${
+      className={`flex cursor-pointer items-center gap-3 rounded-xl text-base-content/70 hover:bg-base-300 ${
         expanded ? "h-10 w-full px-3" : "h-11 w-11 justify-center"
       }`}
     >
@@ -274,7 +274,7 @@ function GroupButton({
       onDragEnd={onDragEnd}
       whileTap={{ scale: 0.96 }}
       whileHover={{ scale: expanded ? 1 : 1.06 }}
-      className={`flex items-center gap-3 rounded-xl transition-colors ${
+      className={`flex cursor-pointer items-center gap-3 rounded-xl transition-colors ${
         expanded ? "h-10 w-full px-3" : "h-11 w-11 justify-center"
       } ${
         isActive
@@ -317,7 +317,7 @@ function GroupButton({
             e.stopPropagation();
             onUngroup();
           }}
-          className={`absolute flex h-4 w-4 items-center justify-center rounded-full bg-base-100 text-base-content/60 shadow ring-1 ring-base-300 hover:bg-error hover:text-error-content ${
+          className={`absolute flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-base-100 text-base-content/60 shadow ring-1 ring-base-300 hover:bg-error hover:text-error-content ${
             expanded ? "right-1 top-1/2 -translate-y-1/2" : "-right-1 -top-1"
           }`}
         >
