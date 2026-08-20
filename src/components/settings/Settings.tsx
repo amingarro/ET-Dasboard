@@ -336,6 +336,13 @@ export function Settings({ onClose }: SettingsProps) {
                       ? "btn-success"
                       : "btn-outline"
                   }`}
+                  // daisyUI gives disabled buttons a ~10%-opacity background by
+                  // design (:is(.btn-disabled, .btn:disabled) background-color:
+                  // color-mix(... 10%, transparent)) — with the aura glowing
+                  // right behind it, that near-transparent face let the glow
+                  // wash straight across the button instead of staying behind
+                  // it. Force an opaque one back while checking.
+                  style={updateState.status === "checking" ? { backgroundColor: "var(--color-base-200)" } : undefined}
                   disabled={updateState.status === "checking"}
                   onClick={checkForUpdates}
                 >
