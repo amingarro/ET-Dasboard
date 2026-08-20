@@ -4,6 +4,8 @@ Todas las novedades importantes de ET Dashboard, versión por versión.
 
 ## [Sin publicar]
 
+- Corregido: el ícono de la app no se veía en Configuración, en el dock ni en las notificaciones de la versión instalada.
+
 ## [0.1.6] - 2026-08-20
 
 - Pantalla de carga animada (círculos superpuestos) al abrir la app.
