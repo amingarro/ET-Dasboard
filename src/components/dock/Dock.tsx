@@ -13,6 +13,7 @@ interface DockProps {
   expanded: boolean;
   width: number;
   loadingServiceIds: Set<string>;
+  updateAvailable?: boolean;
   onOpenSettings: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -23,6 +24,7 @@ export function Dock({
   expanded,
   width,
   loadingServiceIds,
+  updateAvailable,
   onOpenSettings,
   onMouseEnter,
   onMouseLeave,
@@ -165,6 +167,15 @@ export function Dock({
         expanded={expanded}
         title="Configuración"
         label="Configuración"
+        badge={
+          expanded && updateAvailable ? (
+            <span className="aura aura-gold aura-sm block w-fit shrink-0 -rotate-6 rounded-md">
+              <span className="badge badge-success badge-xs whitespace-nowrap px-2 text-[10px] font-bold text-white">
+                New version
+              </span>
+            </span>
+          ) : undefined
+        }
         onClick={onOpenSettings}
         icon={
           // Relative path (not next/image, which rejects relative src
@@ -184,10 +195,11 @@ interface DockActionProps {
   title: string;
   label: string;
   icon: ReactNode;
+  badge?: ReactNode;
   onClick: () => void;
 }
 
-function DockAction({ expanded, title, label, icon, onClick }: DockActionProps) {
+function DockAction({ expanded, title, label, icon, badge, onClick }: DockActionProps) {
   return (
     <motion.button
       type="button"
@@ -201,6 +213,7 @@ function DockAction({ expanded, title, label, icon, onClick }: DockActionProps) 
     >
       {icon}
       {expanded && <span className="truncate text-sm">{label}</span>}
+      {badge}
     </motion.button>
   );
 }

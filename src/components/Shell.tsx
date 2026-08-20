@@ -68,6 +68,11 @@ export function Shell() {
   const { revealed, show, scheduleHide } = useDockReveal(pinned, settingsOpen);
   const dockWidth = state.dockMode === "expanded" ? DOCK_WIDTH_EXPANDED : DOCK_WIDTH_COMPACT;
 
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  useEffect(() => {
+    window.electronAPI.checkForUpdates().then((result) => setUpdateAvailable(result.updateAvailable));
+  }, []);
+
   const [loadingServiceIds, setLoadingServiceIds] = useState<Set<string>>(new Set());
   const handleServiceLoadingChange = useCallback((id: string, isLoading: boolean) => {
     setLoadingServiceIds((prev) => {
@@ -106,6 +111,7 @@ export function Shell() {
         expanded={state.dockMode === "expanded"}
         width={dockWidth}
         loadingServiceIds={loadingServiceIds}
+        updateAvailable={updateAvailable}
         onOpenSettings={() => setSettingsOpen(true)}
         onMouseEnter={show}
         onMouseLeave={scheduleHide}
