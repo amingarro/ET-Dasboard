@@ -1,4 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, session, shell, Tray } from "electron";
+import { spawn } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -98,6 +100,66 @@ async function checkForUpdates(): Promise<UpdateCheckResult> {
       error: err instanceof Error ? err.message : "No se pudo comprobar actualizaciones",
     };
   }
+}
+
+interface GithubAsset {
+  name: string;
+  browser_download_url: string;
+  size: number;
+}
+
+// electron-updater (the standard library) can't update a .deb in place — it
+// only knows how to replace an AppImage or a Windows NSIS install with
+// itself. This app ships as a .deb, managed by apt/dpkg, so "updating"
+// instead means: fetch the newest .deb asset, download it, and hand it to
+// `apt install` — the same thing installing it by hand does, just automated
+// behind one button. `pkexec` shows the normal graphical polkit password
+// prompt (same one used to install the very first time), since writing to
+// /opt and /usr/share always needs root regardless of who triggers it.
+async function downloadAndInstallDebUpdate(onProgress: (percent: number) => void): Promise<void> {
+  const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
+    headers: { Accept: "application/vnd.github+json" },
+  });
+  if (!res.ok) throw new Error(`GitHub API respondió ${res.status}`);
+  const data = (await res.json()) as { assets?: GithubAsset[] };
+  const debAsset = data.assets?.find((a) => a.name.endsWith("_amd64.deb"));
+  if (!debAsset) throw new Error("No se encontró el paquete .deb en la última versión");
+
+  const tempPath = path.join(os.tmpdir(), debAsset.name);
+  const downloadRes = await fetch(debAsset.browser_download_url);
+  if (!downloadRes.ok || !downloadRes.body) {
+    throw new Error(`No se pudo descargar el paquete (${downloadRes.status})`);
+  }
+
+  const total = Number(downloadRes.headers.get("content-length")) || debAsset.size;
+  let downloaded = 0;
+  const fileHandle = fs.createWriteStream(tempPath);
+  const reader = downloadRes.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      downloaded += value.length;
+      fileHandle.write(value);
+      if (total > 0) onProgress((downloaded / total) * 100);
+    }
+  } finally {
+    await new Promise<void>((resolve) => fileHandle.end(resolve));
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn("pkexec", ["apt", "install", "-y", tempPath]);
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      fs.unlink(tempPath, () => {});
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `apt terminó con código ${code}`));
+    });
+  });
 }
 
 function stripFrameHeaders(ses: Electron.Session) {
@@ -319,6 +381,28 @@ app.whenReady().then(async () => {
   ipcMain.handle("check-for-updates", () => checkForUpdates());
   ipcMain.on("open-external", (_event, url: string) => {
     shell.openExternal(url);
+  });
+
+  ipcMain.handle("download-update", async () => {
+    if (!app.isPackaged) return { error: "No disponible en modo desarrollo." };
+    if (process.platform !== "linux") {
+      return { error: "La actualización con un click todavía solo está disponible en Linux." };
+    }
+    try {
+      await downloadAndInstallDebUpdate((percent) => {
+        mainWindow?.webContents.send("update-download-progress", percent);
+      });
+      mainWindow?.webContents.send("update-installed");
+      return { error: null };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo actualizar";
+      mainWindow?.webContents.send("update-error", message);
+      return { error: message };
+    }
+  });
+  ipcMain.on("relaunch-app", () => {
+    app.relaunch();
+    app.exit();
   });
 
   ipcMain.handle("store:get-all", () => store.store);

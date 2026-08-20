@@ -2,6 +2,10 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [Sin publicar]
+
+- El botón "Actualizar" ahora baja el `.deb` nuevo y lo instala solo (con un permiso de administrador, como cualquier instalación de paquete) — antes solo abría la página de GitHub para descargarlo a mano.
+
 ## [0.1.9] - 2026-08-20
 
 - Corregido: el ícono de la app no se veía en Configuración, en el dock ni en las notificaciones de la versión instalada.
