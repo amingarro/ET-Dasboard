@@ -1,6 +1,6 @@
 {
   "name": "et-dashboard",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "Gmail, GitHub, Bitbucket, Trello, Harvest y Jira en una sola ventana de escritorio.",
   "author": "Andres Mingarro <amingarro@easytech.com.ar>",
