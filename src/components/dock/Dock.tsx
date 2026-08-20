@@ -167,23 +167,23 @@ export function Dock({
         expanded={expanded}
         title="Configuración"
         label="Configuración"
-        badge={
-          expanded && updateAvailable ? (
-            <span className="aura aura-gold aura-sm block w-fit shrink-0 -rotate-6 rounded-md">
-              <span className="badge badge-success badge-xs whitespace-nowrap px-2 text-[10px] font-bold text-white">
-                New version
-              </span>
-            </span>
-          ) : undefined
-        }
         onClick={onOpenSettings}
         icon={
-          // Relative path (not next/image, which rejects relative src
-          // strings) — a root-absolute "/app-icon.png" 404s under the
-          // packaged app's file:// load. See notification/page.tsx for the
-          // full explanation.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src="app-icon.png" alt="" width={22} height={22} className="shrink-0 rounded-md" />
+          <span className="relative shrink-0">
+            {/* Relative path (not next/image, which rejects relative src
+                strings) — a root-absolute "/app-icon.png" 404s under the
+                packaged app's file:// load. See notification/page.tsx for the
+                full explanation. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="app-icon.png" alt="" width={28} height={28} className="rounded-md" />
+            {updateAvailable && (
+              <span className="aura aura-xs absolute -bottom-2 -right-2 block w-fit -rotate-3 rounded-full text-success bg-success/20">
+                <span className="badge badge-success badge-xs px-1.5 text-[9px] font-bold text-white">
+                  NEW
+                </span>
+              </span>
+            )}
+          </span>
         }
       />
     </motion.nav>
@@ -195,11 +195,10 @@ interface DockActionProps {
   title: string;
   label: string;
   icon: ReactNode;
-  badge?: ReactNode;
   onClick: () => void;
 }
 
-function DockAction({ expanded, title, label, icon, badge, onClick }: DockActionProps) {
+function DockAction({ expanded, title, label, icon, onClick }: DockActionProps) {
   return (
     <motion.button
       type="button"
@@ -212,8 +211,7 @@ function DockAction({ expanded, title, label, icon, badge, onClick }: DockAction
       }`}
     >
       {icon}
-      {expanded && <span className="truncate text-sm">{label}</span>}
-      {badge}
+      {expanded && <span className="min-w-0 flex-1 truncate text-left text-sm">{label}</span>}
     </motion.button>
   );
 }
