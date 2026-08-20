@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, screen, session, shell, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, session, shell, Tray } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -119,12 +119,18 @@ function stripFrameHeaders(ses: Electron.Session) {
 
 function createWindow() {
   const iconPath = path.join(__dirname, "../build/icon.png");
+  // Passing `icon` as a string to the BrowserWindow constructor doesn't
+  // reliably set the X11 _NET_WM_ICON hint under the ozone-platform=x11
+  // config this app runs with — GNOME's taskbar/dash/Alt-Tab then falls
+  // back to a generic icon. Load it as a nativeImage and call setIcon()
+  // explicitly below as a second, more direct path to the same hint.
+  const appIcon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined;
 
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     title: "ET Dashboard",
-    icon: fs.existsSync(iconPath) ? iconPath : undefined,
+    icon: appIcon,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -132,6 +138,10 @@ function createWindow() {
       webviewTag: true,
     },
   });
+
+  if (appIcon && !appIcon.isEmpty()) {
+    win.setIcon(appIcon);
+  }
 
   if (isDev) {
     win.loadURL("http://localhost:3000");

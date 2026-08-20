@@ -5,6 +5,7 @@
   "description": "Gmail, GitHub, Bitbucket, Trello, Harvest y Jira en una sola ventana de escritorio.",
   "author": "Andres Mingarro <amingarro@easytech.com.ar>",
   "main": "dist-electron/main.js",
+  "desktopName": "et-dashboard.desktop",
   "scripts": {
     "dev:next": "next dev",
     "dev:electron": "wait-on http://localhost:3000 && electron . --ozone-platform=x11",
@@ -34,8 +35,9 @@
       "repo": "ET-Dasboard"
     },
     "linux": {
-      "icon": "build/icon.png",
+      "icon": "build/icons",
       "category": "Network",
+      "syncDesktopName": true,
       "target": [
         "AppImage",
         "deb"
