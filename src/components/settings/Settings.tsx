@@ -14,12 +14,6 @@ type UpdateState =
   | { status: "checking" }
   | { status: "done"; result: UpdateCheckResult };
 
-const DUMMY_NOTIFICATIONS = [
-  { title: "Nuevo mensaje", body: "Tenés un mensaje nuevo sin leer en la bandeja de entrada." },
-  { title: "Te mencionaron", body: "Alguien te mencionó en un comentario." },
-  { title: "Recordatorio", body: "Una tarjeta vence hoy — no te olvides de revisarla." },
-];
-
 interface SettingsProps {
   onClose: () => void;
 }
@@ -40,13 +34,6 @@ export function Settings({ onClose }: SettingsProps) {
       setUpdateState({ status: "done", result });
     });
   }, []);
-
-  function sendDummyNotification() {
-    const enabledIds = state.services.filter((s) => s.enabled).map((s) => s.id);
-    const serviceId = enabledIds[Math.floor(Math.random() * enabledIds.length)] ?? "gmail";
-    const sample = DUMMY_NOTIFICATIONS[Math.floor(Math.random() * DUMMY_NOTIFICATIONS.length)];
-    window.electronAPI.showNotification({ serviceId, ...sample });
-  }
 
   const orderedIds = [...SERVICE_DEFINITIONS.map((s) => s.id)].sort((a, b) => {
     const orderA = state.services.find((s) => s.id === a)?.order ?? 0;
@@ -216,18 +203,6 @@ export function Settings({ onClose }: SettingsProps) {
               &quot;Ícono y texto&quot; y &quot;Ícono solo&quot; lo dejan siempre visible.
               &quot;Automático&quot; lo oculta y aparece al acercar el mouse al borde.
             </p>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-base-content/70">Notificaciones</p>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm w-fit gap-2"
-              onClick={sendDummyNotification}
-            >
-              <Bell size={16} />
-              Probar notificación
-            </button>
           </div>
 
           <p className="text-sm text-base-content/70">
