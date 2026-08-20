@@ -2,7 +2,7 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
-## [Sin publicar]
+## [0.1.10] - 2026-08-20
 
 - El botón "Actualizar" ahora descarga la nueva versión adentro de la app y la instala con un click en "Reiniciar e instalar" — antes solo abría la página de GitHub. Solo funciona en la versión AppImage o Windows; la versión .deb sigue actualizándose con `apt`.
 
