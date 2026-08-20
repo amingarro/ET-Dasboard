@@ -25,6 +25,14 @@ export interface NotificationPayload {
   body: string;
 }
 
+export interface UpdateCheckResult {
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  releaseUrl: string | null;
+  error: string | null;
+}
+
 export interface StoreSchema {
   onboarded: boolean;
   theme: "light" | "dark" | "system";
@@ -43,6 +51,8 @@ declare global {
       onNotificationData: (callback: (payload: NotificationPayload) => void) => () => void;
       activateNotificationService: (serviceId: string) => void;
       closeNotificationPopup: () => void;
+      checkForUpdates: () => Promise<UpdateCheckResult>;
+      openExternal: (url: string) => void;
       store: {
         getAll: () => Promise<StoreSchema>;
         set: (patch: Partial<StoreSchema>) => Promise<StoreSchema>;

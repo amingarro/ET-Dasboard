@@ -1,12 +1,19 @@
 "use client";
 
-import { Bell, BellOff, GripVertical, X } from "lucide-react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { Bell, BellOff, GripVertical, RefreshCw, X } from "lucide-react";
 import { motion } from "motion/react";
+import Image from "next/image";
 import { SERVICE_DEFINITIONS, getServiceDefinition } from "@/lib/services";
 import { ServiceIcon } from "@/components/ServiceIcon";
 import { useDragReorder } from "@/lib/useDragReorder";
 import { useStore } from "@/lib/store";
-import type { DockMode, ServiceConfig, StoreSchema } from "@/types/electron-api";
+import type { DockMode, ServiceConfig, StoreSchema, UpdateCheckResult } from "@/types/electron-api";
+
+type UpdateState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "done"; result: UpdateCheckResult };
 
 const DUMMY_NOTIFICATIONS = [
   { title: "Nuevo mensaje", body: "Tenés un mensaje nuevo sin leer en la bandeja de entrada." },
@@ -20,6 +27,18 @@ interface SettingsProps {
 
 export function Settings({ onClose }: SettingsProps) {
   const { state, update } = useStore();
+  const [updateState, setUpdateState] = useState<UpdateState>({ status: "idle" });
+
+  function checkForUpdates() {
+    setUpdateState({ status: "checking" });
+    window.electronAPI.checkForUpdates().then((result) => {
+      setUpdateState({ status: "done", result });
+    });
+  }
+
+  useEffect(() => {
+    checkForUpdates();
+  }, []);
 
   function sendDummyNotification() {
     const enabledIds = state.services.filter((s) => s.enabled).map((s) => s.id);
@@ -144,7 +163,10 @@ export function Settings({ onClose }: SettingsProps) {
       >
         <div className="card-body gap-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">Configuración</h2>
+            <div className="flex items-center gap-2">
+              <Image src="/app-icon.png" alt="" width={24} height={24} className="rounded-md" />
+              <h2 className="text-xl font-bold">Configuración</h2>
+            </div>
             <button
               type="button"
               className="btn btn-ghost btn-sm btn-circle"
@@ -302,6 +324,67 @@ export function Settings({ onClose }: SettingsProps) {
               </ul>
             </div>
           )}
+
+          <div className="flex flex-col gap-2 border-t border-base-300 pt-4">
+            <p className="text-sm text-base-content/70">Versión</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">
+                v{updateState.status === "done" ? updateState.result.currentVersion : window.electronAPI ? "…" : ""}
+              </span>
+              <span
+                className="aura aura-sm block w-fit rounded-lg"
+                style={
+                  {
+                    color: updateState.status === "checking" ? "var(--color-primary)" : "transparent",
+                    animationPlayState: updateState.status === "checking" ? "running" : "paused",
+                    "--aura-radius": "0.5rem",
+                  } as CSSProperties
+                }
+              >
+                <button
+                  type="button"
+                  className={`btn btn-sm gap-2 ${
+                    updateState.status === "done" && updateState.result.updateAvailable
+                      ? "btn-success"
+                      : "btn-outline"
+                  }`}
+                  disabled={updateState.status === "checking"}
+                  onClick={checkForUpdates}
+                >
+                  <RefreshCw size={14} />
+                  Buscar actualizaciones
+                </button>
+              </span>
+            </div>
+
+            {updateState.status === "done" && updateState.result.error && (
+              <p className="text-xs text-error">No se pudo comprobar: {updateState.result.error}</p>
+            )}
+            {updateState.status === "done" &&
+              !updateState.result.error &&
+              (updateState.result.updateAvailable ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="badge badge-primary badge-sm">Nueva versión</span>
+                  <span className="text-base-content/70">
+                    {updateState.result.latestVersion} disponible
+                  </span>
+                  <button
+                    type="button"
+                    className="link link-primary"
+                    onClick={() => {
+                      const url = updateState.result.releaseUrl;
+                      if (url) window.electronAPI.openExternal(url);
+                    }}
+                  >
+                    Descargar
+                  </button>
+                </div>
+              ) : updateState.result.latestVersion ? (
+                <p className="text-xs text-success">Estás usando la última versión.</p>
+              ) : (
+                <p className="text-xs text-base-content/50">Todavía no hay versiones publicadas.</p>
+              ))}
+          </div>
 
           <p className="text-xs text-base-content/50">
             Tiene que quedar al menos una página activa. Los cambios se guardan al instante.

@@ -36,7 +36,7 @@ function soloGroup(serviceId: string): ViewGroup {
 const defaultStoreValues: StoreSchema = {
   onboarded: false,
   theme: "system",
-  dockMode: "auto",
+  dockMode: "expanded",
   services: defaultServices.map((service, index) => ({
     id: service.id,
     enabled: true,
@@ -130,7 +130,7 @@ export async function getStore(): Promise<AppStore> {
       storeInstance.set({ layout: migrated });
     }
     if (!current.dockMode) {
-      storeInstance.set({ dockMode: "auto" });
+      storeInstance.set({ dockMode: "expanded" });
     }
 
     // electron-store doesn't backfill missing fields on objects already

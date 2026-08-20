@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, screen, session, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, screen, session, shell, Tray } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -32,6 +32,73 @@ let notificationWindow: BrowserWindow | null = null;
 const notificationQueue: NotificationPayload[] = [];
 let notificationTimer: ReturnType<typeof setTimeout> | null = null;
 let notificationShowing = false;
+
+// Matches package.json's build.publish (owner/repo) — where the GitHub
+// Actions release pipeline (.github/workflows/release.yml) publishes tagged
+// builds via electron-builder.
+const RELEASES_REPO = "amingarro/ET-Dasboard";
+
+interface UpdateCheckResult {
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  releaseUrl: string | null;
+  error: string | null;
+}
+
+/** Numeric semver compare, "v" prefix optional on either side. Returns >0 if
+ * `a` is newer than `b`. Missing/non-numeric parts are treated as 0, which is
+ * enough for this project's plain MAJOR.MINOR.PATCH tags. */
+function compareVersions(a: string, b: string): number {
+  const clean = (v: string) => v.replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
+  const partsA = clean(a);
+  const partsB = clean(b);
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const diff = (partsA[i] ?? 0) - (partsB[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+async function checkForUpdates(): Promise<UpdateCheckResult> {
+  const currentVersion = app.getVersion();
+  try {
+    const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    // A repo with no published GitHub Release yet 404s here — that's an
+    // expected state (this project's release workflow is manual/on-demand),
+    // not a real failure, so it's reported as "no releases" rather than an
+    // error.
+    if (res.status === 404) {
+      return {
+        currentVersion,
+        latestVersion: null,
+        updateAvailable: false,
+        releaseUrl: null,
+        error: null,
+      };
+    }
+    if (!res.ok) throw new Error(`GitHub API respondió ${res.status}`);
+    const data = (await res.json()) as { tag_name?: string; html_url?: string };
+    const latestVersion = data.tag_name ?? null;
+    return {
+      currentVersion,
+      latestVersion,
+      updateAvailable: Boolean(latestVersion && compareVersions(latestVersion, currentVersion) > 0),
+      releaseUrl: data.html_url ?? null,
+      error: null,
+    };
+  } catch (err) {
+    return {
+      currentVersion,
+      latestVersion: null,
+      updateAvailable: false,
+      releaseUrl: null,
+      error: err instanceof Error ? err.message : "No se pudo comprobar actualizaciones",
+    };
+  }
+}
 
 function stripFrameHeaders(ses: Electron.Session) {
   ses.webRequest.onHeadersReceived((details, callback) => {
@@ -232,6 +299,11 @@ app.whenReady().then(async () => {
 
   ipcMain.on("close-notification-popup", () => {
     dismissCurrentNotification();
+  });
+
+  ipcMain.handle("check-for-updates", () => checkForUpdates());
+  ipcMain.on("open-external", (_event, url: string) => {
+    shell.openExternal(url);
   });
 
   ipcMain.handle("store:get-all", () => store.store);

@@ -1,12 +1,8 @@
 "use client";
 
-import { useRef, useState, type DragEvent, type ReactNode } from "react";
-import {
-  Settings as SettingsIcon,
-  SplitSquareHorizontal,
-  SplitSquareVertical,
-  X,
-} from "lucide-react";
+import { useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import Image from "next/image";
+import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { motion } from "motion/react";
 import { getServiceDefinition } from "@/lib/services";
 import { ServiceIcon } from "@/components/ServiceIcon";
@@ -17,12 +13,21 @@ interface DockProps {
   revealed: boolean;
   expanded: boolean;
   width: number;
+  loadingServiceIds: Set<string>;
   onOpenSettings: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }
 
-export function Dock({ revealed, expanded, width, onOpenSettings, onMouseEnter, onMouseLeave }: DockProps) {
+export function Dock({
+  revealed,
+  expanded,
+  width,
+  loadingServiceIds,
+  onOpenSettings,
+  onMouseEnter,
+  onMouseLeave,
+}: DockProps) {
   const { state, update } = useStore();
   const draggedGroupIdRef = useRef<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -128,6 +133,7 @@ export function Dock({ revealed, expanded, width, onOpenSettings, onMouseEnter, 
               expanded={expanded}
               isActive={group.id === state.layout.activeGroupId}
               isDropTarget={dropTargetId === group.id}
+              isLoading={group.serviceIds.some((id) => loadingServiceIds.has(id))}
               onClick={() => activateGroup(group.id)}
               onDragStart={() => handleDragStart(group.id)}
               onDragOver={(e) => handleDragOver(group.id, e)}
@@ -161,7 +167,15 @@ export function Dock({ revealed, expanded, width, onOpenSettings, onMouseEnter, 
         title="Configuración"
         label="Configuración"
         onClick={onOpenSettings}
-        icon={<SettingsIcon size={20} />}
+        icon={
+          <Image
+            src="/app-icon.png"
+            alt=""
+            width={22}
+            height={22}
+            className="shrink-0 rounded-md"
+          />
+        }
       />
     </motion.nav>
   );
@@ -198,6 +212,7 @@ interface GroupButtonProps {
   expanded: boolean;
   isActive: boolean;
   isDropTarget: boolean;
+  isLoading: boolean;
   onClick: () => void;
   onDragStart: () => void;
   onDragOver: (e: DragEvent<HTMLButtonElement>) => void;
@@ -212,6 +227,7 @@ function GroupButton({
   expanded,
   isActive,
   isDropTarget,
+  isLoading,
   onClick,
   onDragStart,
   onDragOver,
@@ -239,29 +255,61 @@ function GroupButton({
     <ServiceIcon service={services[0]} size={20} className="shrink-0" />
   );
 
+  // daisyUI's `aura` utility (https://daisyui.com/components/aura/): a
+  // rotating conic-gradient ring in `currentColor`, drawn as the wrapper's
+  // own background with the child covering everything but a thin padding
+  // strip — so the child needs an opaque background or the gradient shows
+  // through the whole button instead of just framing it. Tinted per-button
+  // with the service's own brand color, per request.
+  const auraColor = services[0].color;
+
+  const button = (
+    <motion.button
+      type="button"
+      title={title}
+      draggable
+      onClick={onClick}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      whileTap={{ scale: 0.96 }}
+      whileHover={{ scale: expanded ? 1 : 1.06 }}
+      className={`flex items-center gap-3 rounded-xl transition-colors ${
+        expanded ? "h-10 w-full px-3" : "h-11 w-11 justify-center"
+      } ${
+        isActive
+          ? "bg-primary text-primary-content"
+          : `text-base-content/70 hover:bg-base-300 ${isLoading ? "bg-base-200" : ""}`
+      } ${isDropTarget ? "ring-2 ring-primary ring-offset-2 ring-offset-base-200" : ""}`}
+    >
+      {icon}
+      {expanded && <span className="truncate text-sm">{label}</span>}
+    </motion.button>
+  );
+
   return (
     <div className="relative">
-      <motion.button
-        type="button"
-        title={title}
-        draggable
-        onClick={onClick}
-        onDragStart={onDragStart}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-        onDragEnd={onDragEnd}
-        whileTap={{ scale: 0.96 }}
-        whileHover={{ scale: expanded ? 1 : 1.06 }}
-        className={`flex items-center gap-3 rounded-xl transition-colors ${
-          expanded ? "h-10 w-full px-3" : "h-11 w-11 justify-center"
-        } ${isActive ? "bg-primary text-primary-content" : "text-base-content/70 hover:bg-base-300"} ${
-          isDropTarget ? "ring-2 ring-primary ring-offset-2 ring-offset-base-200" : ""
-        }`}
+      {/* Always mounted with the same `aura` padding reserved, loading or
+          not — toggling the wrapper in/out of the tree shifts every button
+          below it by the aura's padding, which read as the whole dock
+          jumping each time a page started/finished loading. Instead the
+          padding stays constant and only `color` (the gradient's
+          currentColor source) toggles transparent, so nothing ever
+          reflows. */}
+      <span
+        className="aura aura-sm block rounded-xl"
+        style={
+          {
+            color: isLoading ? auraColor : "transparent",
+            animationPlayState: isLoading ? "running" : "paused",
+            "--aura-radius": "0.75rem",
+          } as CSSProperties
+        }
       >
-        {icon}
-        {expanded && <span className="truncate text-sm">{label}</span>}
-      </motion.button>
+        {button}
+      </span>
 
       {isGroup && (
         <button

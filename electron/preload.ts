@@ -30,6 +30,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("activate-notification-service", serviceId),
   closeNotificationPopup: () => ipcRenderer.send("close-notification-popup"),
 
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+  openExternal: (url: string) => ipcRenderer.send("open-external", url),
+
   store: {
     getAll: () => ipcRenderer.invoke("store:get-all"),
     set: (patch: Record<string, unknown>) => ipcRenderer.invoke("store:set", patch),

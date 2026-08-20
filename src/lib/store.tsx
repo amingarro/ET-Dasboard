@@ -13,7 +13,7 @@ import type { StoreSchema } from "@/types/electron-api";
 const initialState: StoreSchema = {
   onboarded: false,
   theme: "system",
-  dockMode: "auto",
+  dockMode: "expanded",
   services: [],
   layout: {
     groups: [],

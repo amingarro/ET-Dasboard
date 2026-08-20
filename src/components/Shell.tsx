@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Onboarding } from "@/components/onboarding/Onboarding";
 import { LoadingScreen } from "@/components/LoadingScreen";
@@ -68,6 +68,20 @@ export function Shell() {
   const { revealed, show, scheduleHide } = useDockReveal(pinned, settingsOpen);
   const dockWidth = state.dockMode === "expanded" ? DOCK_WIDTH_EXPANDED : DOCK_WIDTH_COMPACT;
 
+  const [loadingServiceIds, setLoadingServiceIds] = useState<Set<string>>(new Set());
+  const handleServiceLoadingChange = useCallback((id: string, isLoading: boolean) => {
+    setLoadingServiceIds((prev) => {
+      if (isLoading === prev.has(id)) return prev;
+      const next = new Set(prev);
+      if (isLoading) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -91,6 +105,7 @@ export function Shell() {
         revealed={revealed}
         expanded={state.dockMode === "expanded"}
         width={dockWidth}
+        loadingServiceIds={loadingServiceIds}
         onOpenSettings={() => setSettingsOpen(true)}
         onMouseEnter={show}
         onMouseLeave={scheduleHide}
@@ -101,7 +116,7 @@ export function Shell() {
         animate={{ paddingLeft: pinned ? dockWidth : 0 }}
         transition={{ type: "spring", stiffness: 420, damping: 42 }}
       >
-        <WebviewStack />
+        <WebviewStack onLoadingChange={handleServiceLoadingChange} />
       </motion.div>
 
       <AnimatePresence>

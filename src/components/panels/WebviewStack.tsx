@@ -58,6 +58,7 @@ interface ServiceWebviewProps {
   isVisible: boolean;
   preloadPath?: string;
   notificationsEnabled: boolean;
+  onLoadingChange: (id: string, loading: boolean) => void;
 }
 
 function ServiceWebview({
@@ -66,6 +67,7 @@ function ServiceWebview({
   isVisible,
   preloadPath,
   notificationsEnabled,
+  onLoadingChange,
 }: ServiceWebviewProps) {
   const ref = useRef<HTMLElement | null>(null);
 
@@ -85,9 +87,19 @@ function ServiceWebview({
       });
     }
 
+    const handleStartLoading = () => onLoadingChange(service.id, true);
+    const handleStopLoading = () => onLoadingChange(service.id, false);
+
     el.addEventListener("ipc-message", handleIpcMessage);
-    return () => el.removeEventListener("ipc-message", handleIpcMessage);
-  }, [service.id, notificationsEnabled]);
+    el.addEventListener("did-start-loading", handleStartLoading);
+    el.addEventListener("did-stop-loading", handleStopLoading);
+    return () => {
+      el.removeEventListener("ipc-message", handleIpcMessage);
+      el.removeEventListener("did-start-loading", handleStartLoading);
+      el.removeEventListener("did-stop-loading", handleStopLoading);
+      onLoadingChange(service.id, false);
+    };
+  }, [service.id, notificationsEnabled, onLoadingChange]);
 
   return (
     <webview
@@ -105,7 +117,11 @@ function ServiceWebview({
   );
 }
 
-export function WebviewStack() {
+interface WebviewStackProps {
+  onLoadingChange: (id: string, loading: boolean) => void;
+}
+
+export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
   const { state, update } = useStore();
   const [rects, setRects] = useState<Record<string, DOMRect>>({});
   const [preloadPath, setPreloadPath] = useState<string | undefined>(undefined);
@@ -214,6 +230,7 @@ export function WebviewStack() {
               notificationsEnabled={
                 state.services.find((s) => s.id === service.id)?.notificationsEnabled ?? true
               }
+              onLoadingChange={onLoadingChange}
             />
 
             {isVisible && (
