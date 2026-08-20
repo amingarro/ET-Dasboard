@@ -12,7 +12,10 @@ import type { DockMode, ServiceConfig, StoreSchema, UpdateCheckResult } from "@/
 type UpdateState =
   | { status: "idle" }
   | { status: "checking" }
-  | { status: "done"; result: UpdateCheckResult };
+  | { status: "done"; result: UpdateCheckResult }
+  | { status: "downloading"; percent: number }
+  | { status: "downloaded" }
+  | { status: "download-error"; message: string };
 
 // Real checks often resolve in well under a second, which made the
 // "checking" spinner flash and the result content pop in right after it —
@@ -28,9 +31,14 @@ export function Settings({ onClose }: SettingsProps) {
   const { state, update } = useStore();
   const [updateState, setUpdateState] = useState<UpdateState>({ status: "checking" });
 
+  const [releaseUrl, setReleaseUrl] = useState<string | null>(null);
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null);
+
   function runUpdateCheck() {
     const start = Date.now();
     window.electronAPI.checkForUpdates().then((result) => {
+      setReleaseUrl(result.releaseUrl);
+      setCurrentVersion(result.currentVersion);
       const delay = Math.max(0, MIN_CHECK_DURATION_MS - (Date.now() - start));
       setTimeout(() => setUpdateState({ status: "done", result }), delay);
     });
@@ -40,6 +48,30 @@ export function Settings({ onClose }: SettingsProps) {
     setUpdateState({ status: "checking" });
     runUpdateCheck();
   }
+
+  function downloadUpdate() {
+    setUpdateState({ status: "downloading", percent: 0 });
+    window.electronAPI.downloadUpdate().then(({ error }) => {
+      if (error) setUpdateState({ status: "download-error", message: error });
+    });
+  }
+
+  useEffect(() => {
+    const offProgress = window.electronAPI.onUpdateDownloadProgress((percent) =>
+      setUpdateState({ status: "downloading", percent }),
+    );
+    const offDownloaded = window.electronAPI.onUpdateDownloaded(() =>
+      setUpdateState({ status: "downloaded" }),
+    );
+    const offError = window.electronAPI.onUpdateError((message) =>
+      setUpdateState({ status: "download-error", message }),
+    );
+    return () => {
+      offProgress();
+      offDownloaded();
+      offError();
+    };
+  }, []);
 
   useEffect(() => {
     runUpdateCheck();
@@ -317,7 +349,7 @@ export function Settings({ onClose }: SettingsProps) {
             <p className="text-sm text-base-content/70">Versión</p>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium">
-                v{updateState.status === "done" ? updateState.result.currentVersion : window.electronAPI ? "…" : ""}
+                v{currentVersion ?? (window.electronAPI ? "…" : "")}
               </span>
               <span
                 className="aura aura-sm block w-fit rounded-lg"
@@ -343,7 +375,7 @@ export function Settings({ onClose }: SettingsProps) {
                   // wash straight across the button instead of staying behind
                   // it. Force an opaque one back while checking.
                   style={updateState.status === "checking" ? { backgroundColor: "var(--color-base-200)" } : undefined}
-                  disabled={updateState.status === "checking"}
+                  disabled={updateState.status === "checking" || updateState.status === "downloading"}
                   onClick={checkForUpdates}
                 >
                   <RefreshCw size={14} />
@@ -363,15 +395,8 @@ export function Settings({ onClose }: SettingsProps) {
                   <span className="text-base-content/70">
                     {updateState.result.latestVersion} disponible
                   </span>
-                  <button
-                    type="button"
-                    className="link link-primary"
-                    onClick={() => {
-                      const url = updateState.result.releaseUrl;
-                      if (url) window.electronAPI.openExternal(url);
-                    }}
-                  >
-                    Descargar
+                  <button type="button" className="link link-primary" onClick={downloadUpdate}>
+                    Actualizar
                   </button>
                 </div>
               ) : updateState.result.latestVersion ? (
@@ -379,6 +404,47 @@ export function Settings({ onClose }: SettingsProps) {
               ) : (
                 <p className="text-xs text-base-content/50">Todavía no hay versiones publicadas.</p>
               ))}
+
+            {updateState.status === "downloading" && (
+              <div className="flex items-center gap-2 text-xs">
+                <progress
+                  className="progress progress-primary w-32"
+                  value={updateState.percent}
+                  max={100}
+                />
+                <span className="text-base-content/70">
+                  Descargando… {Math.round(updateState.percent)}%
+                </span>
+              </div>
+            )}
+
+            {updateState.status === "downloaded" && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="badge badge-success badge-sm">Lista</span>
+                <button
+                  type="button"
+                  className="link link-primary"
+                  onClick={() => window.electronAPI.quitAndInstall()}
+                >
+                  Reiniciar e instalar
+                </button>
+              </div>
+            )}
+
+            {updateState.status === "download-error" && (
+              <div className="flex flex-col gap-1 text-xs">
+                <p className="text-error">No se pudo descargar: {updateState.message}</p>
+                {releaseUrl && (
+                  <button
+                    type="button"
+                    className="link link-primary w-fit"
+                    onClick={() => window.electronAPI.openExternal(releaseUrl)}
+                  >
+                    Descargar manualmente
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <p className="text-xs text-base-content/50">
