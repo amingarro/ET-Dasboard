@@ -2,7 +2,7 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
-## [Sin publicar]
+## [0.1.9] - 2026-08-20
 
 - Corregido: el ícono de la app no se veía en Configuración, en el dock ni en las notificaciones de la versión instalada.
 - Corregido: el ícono de la app no aparecía en el dock/Actividades de GNOME ni en el Alt-Tab de la versión instalada en Linux.
