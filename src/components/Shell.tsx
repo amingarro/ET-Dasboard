@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Onboarding } from "@/components/onboarding/Onboarding";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { Dock } from "@/components/dock/Dock";
 import { WebviewStack } from "@/components/panels/WebviewStack";
 import { Settings } from "@/components/settings/Settings";
@@ -68,11 +69,7 @@ export function Shell() {
   const dockWidth = state.dockMode === "expanded" ? DOCK_WIDTH_EXPANDED : DOCK_WIDTH_COMPACT;
 
   if (loading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-base-100">
-        <span className="loading loading-spinner loading-lg" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!state.onboarded) {
