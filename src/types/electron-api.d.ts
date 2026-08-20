@@ -53,11 +53,6 @@ declare global {
       closeNotificationPopup: () => void;
       checkForUpdates: () => Promise<UpdateCheckResult>;
       openExternal: (url: string) => void;
-      downloadUpdate: () => Promise<{ error: string | null }>;
-      quitAndInstall: () => void;
-      onUpdateDownloadProgress: (callback: (percent: number) => void) => () => void;
-      onUpdateDownloaded: (callback: () => void) => () => void;
-      onUpdateError: (callback: (message: string) => void) => () => void;
       store: {
         getAll: () => Promise<StoreSchema>;
         set: (patch: Partial<StoreSchema>) => Promise<StoreSchema>;

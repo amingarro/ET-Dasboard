@@ -1,5 +1,4 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, session, shell, Tray } from "electron";
-import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -322,25 +321,6 @@ app.whenReady().then(async () => {
     shell.openExternal(url);
   });
 
-  // Real auto-update (download + install) only works from a packaged build —
-  // electron-updater reads app-update.yml, which electron-builder only
-  // generates for packaged output, not `next dev`/`electron .`. Only the
-  // Linux AppImage and the Windows NSIS installer can replace themselves
-  // this way; a .deb install is managed by apt, not by the app itself.
-  ipcMain.handle("download-update", () => {
-    if (!app.isPackaged) {
-      return { error: "No disponible en modo desarrollo." };
-    }
-    autoUpdater.checkForUpdates().catch((err) => {
-      mainWindow?.webContents.send(
-        "update-error",
-        err instanceof Error ? err.message : "No se pudo descargar la actualización",
-      );
-    });
-    return { error: null };
-  });
-  ipcMain.on("quit-and-install", () => autoUpdater.quitAndInstall());
-
   ipcMain.handle("store:get-all", () => store.store);
   ipcMain.handle("store:set", (_event, patch: Partial<StoreSchema>) => {
     store.set(patch);
@@ -354,23 +334,6 @@ app.whenReady().then(async () => {
   mainWindow = createWindow();
   createTray(mainWindow);
   notificationWindow = createNotificationWindow();
-
-  if (app.isPackaged) {
-    // Downloading only starts once the user clicks the update button (see
-    // the "download-update" handler above) — checkForUpdates() there is
-    // only ever called on that explicit click, so autoDownload=true (the
-    // default) just means "download the update this check just found",
-    // not "silently download whenever anything checks in the background".
-    autoUpdater.on("download-progress", (progress) => {
-      mainWindow?.webContents.send("update-download-progress", progress.percent);
-    });
-    autoUpdater.on("update-downloaded", () => {
-      mainWindow?.webContents.send("update-downloaded");
-    });
-    autoUpdater.on("error", (err) => {
-      mainWindow?.webContents.send("update-error", err.message);
-    });
-  }
 
   app.on("activate", () => {
     if (mainWindow) {

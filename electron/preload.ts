@@ -33,24 +33,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
   openExternal: (url: string) => ipcRenderer.send("open-external", url),
 
-  downloadUpdate: () => ipcRenderer.invoke("download-update"),
-  quitAndInstall: () => ipcRenderer.send("quit-and-install"),
-  onUpdateDownloadProgress: (callback: (percent: number) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, percent: number) => callback(percent);
-    ipcRenderer.on("update-download-progress", listener);
-    return () => ipcRenderer.removeListener("update-download-progress", listener);
-  },
-  onUpdateDownloaded: (callback: () => void) => {
-    const listener = () => callback();
-    ipcRenderer.on("update-downloaded", listener);
-    return () => ipcRenderer.removeListener("update-downloaded", listener);
-  },
-  onUpdateError: (callback: (message: string) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, message: string) => callback(message);
-    ipcRenderer.on("update-error", listener);
-    return () => ipcRenderer.removeListener("update-error", listener);
-  },
-
   store: {
     getAll: () => ipcRenderer.invoke("store:get-all"),
     set: (patch: Record<string, unknown>) => ipcRenderer.invoke("store:set", patch),
