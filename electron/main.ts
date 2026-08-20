@@ -5,22 +5,13 @@ import { pathToFileURL } from "node:url";
 import { defaultServices } from "./services";
 import { getStore, type StoreSchema } from "./store";
 
-// Forcing XWayland compatibility mode (--ozone-platform=x11) was tried here
-// to fix the Tray icon not showing under native Wayland on GNOME. It did fix
-// the tray, but on a hybrid-GPU laptop (Intel iGPU + NVIDIA dGPU, confirmed
-// via `lspci`) it also either (a) segfaulted in Mesa's libGLESv2 during GPU
-// process init with hardware acceleration on, or (b) with acceleration
-// forced off, made the X11 software bitmap presenter fail
-// ("XGetWindowAttributes failed for window N") so the window process runs
-// but nothing ever paints — silently invisible, no window, no tray. Neither
-// combination is usable. Priority is a visible, working window over the
-// tray icon, so this no longer touches ozone-platform at all — Electron
-// auto-detects native Wayland on this session, which sidesteps the X11
-// presenter code path entirely. Revisit the tray-under-Wayland problem
-// separately (and check the render node — /dev/dri/renderD129 vs the
-// Intel/NVIDIA split — before touching GPU flags again) rather than
-// reintroducing this tradeoff.
-
+// This file intentionally does NOT set --ozone-platform or --no-sandbox
+// via app.commandLine.appendSwitch()/process.env — both were tried here and
+// neither is reliably early enough (see scripts/afterPack.cjs for the full
+// story and why both flags instead get passed as real process arguments by
+// a launcher-script wrapper around the packaged Linux binary). For dev,
+// the `dev:electron` npm script passes --ozone-platform=x11 as a literal
+// CLI arg to `electron .` for the same reason.
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
