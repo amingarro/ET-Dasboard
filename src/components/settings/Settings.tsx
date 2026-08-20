@@ -14,6 +14,12 @@ type UpdateState =
   | { status: "checking" }
   | { status: "done"; result: UpdateCheckResult };
 
+// Real checks often resolve in well under a second, which made the
+// "checking" spinner flash and the result content pop in right after it —
+// a jarring layout jump instead of visible feedback. Hold "checking" open
+// for at least this long so the state change always reads as intentional.
+const MIN_CHECK_DURATION_MS = 3000;
+
 interface SettingsProps {
   onClose: () => void;
 }
@@ -22,17 +28,21 @@ export function Settings({ onClose }: SettingsProps) {
   const { state, update } = useStore();
   const [updateState, setUpdateState] = useState<UpdateState>({ status: "checking" });
 
-  function checkForUpdates() {
-    setUpdateState({ status: "checking" });
+  function runUpdateCheck() {
+    const start = Date.now();
     window.electronAPI.checkForUpdates().then((result) => {
-      setUpdateState({ status: "done", result });
+      const delay = Math.max(0, MIN_CHECK_DURATION_MS - (Date.now() - start));
+      setTimeout(() => setUpdateState({ status: "done", result }), delay);
     });
   }
 
+  function checkForUpdates() {
+    setUpdateState({ status: "checking" });
+    runUpdateCheck();
+  }
+
   useEffect(() => {
-    window.electronAPI.checkForUpdates().then((result) => {
-      setUpdateState({ status: "done", result });
-    });
+    runUpdateCheck();
   }, []);
 
   const orderedIds = [...SERVICE_DEFINITIONS.map((s) => s.id)].sort((a, b) => {
