@@ -2,6 +2,13 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.13] - 2026-08-21
+
+- Notas ahora se puede sincronizar con una carpeta en Google Drive, a mano con un botón o automáticamente en cada edición (activable en Configuración).
+- Configuración se rediseñó: en vez de una columna larga con scroll, ahora tiene categorías en una barra lateral (Servicios del dock / Sincronización / Apariencia) y la versión instalada + el estado de actualizaciones quedan siempre visibles abajo.
+- Corregido: al re-chequear actualizaciones, la marca de "Nueva versión disponible" ya no desaparecía y volvía a aparecer — ahora solo se atenúa mientras dura el chequeo.
+- El color primario del tema claro (usado en el ícono activo del dock, toggles, botones y badges) ahora es menos saturado; el tema oscuro no cambió.
+
 ## [0.1.11] - 2026-08-20
 
 - El botón "Actualizar" ahora baja el `.deb` nuevo y lo instala solo (con un permiso de administrador, como cualquier instalación de paquete) — antes solo abría la página de GitHub para descargarlo a mano.
