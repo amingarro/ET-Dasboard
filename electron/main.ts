@@ -6,6 +6,7 @@ import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { defaultServices } from "./services";
 import { getStore, type StoreSchema } from "./store";
+import { deleteNote, listNotes, saveNote, type Note } from "./notesStore";
 
 // This file intentionally does NOT set --ozone-platform or --no-sandbox
 // via app.commandLine.appendSwitch()/process.env — both were tried here and
@@ -410,6 +411,12 @@ app.whenReady().then(async () => {
     store.set(patch);
     return store.store;
   });
+
+  // Notes live in their own one-file-per-note directory instead of the
+  // electron-store config above — see notesStore.ts for why.
+  ipcMain.handle("notes:list", () => listNotes());
+  ipcMain.handle("notes:save", (_event, note: Note) => saveNote(note));
+  ipcMain.handle("notes:delete", (_event, id: string) => deleteNote(id));
 
   store.onDidAnyChange((newValue) => {
     mainWindow?.webContents.send("store:changed", newValue);

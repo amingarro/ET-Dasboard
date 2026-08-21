@@ -16,3 +16,126 @@ body {
      rounded card instead of a solid rectangle behind it. */
   background: transparent;
 }
+
+/* Notes' pastel palette (src/components/notas/colors.ts). Defined as plain
+   custom properties, not Tailwind's dark: variant — this app's theme is
+   driven by the data-theme attribute (see useThemeSync.ts), which Tailwind's
+   media-query-based dark: doesn't track: if the user forces dark theme while
+   the OS is set to light, dark: classes wouldn't apply and these colors
+   would come out illegible. The 3-state pattern below (light default,
+   OS-dark fallback, explicit data-theme override) mirrors the theme
+   attribute's own tri-state logic instead. Each pair is a real Tailwind
+   palette 100/900 (light) or 950/200 (dark) combo, chosen for contrast. */
+:root {
+  /* The "sin color" default — a classic pale sticky-note yellow, not the
+     app's neutral bg-base-100, per explicit request. */
+  --note-default-bg: #fef9c3;
+  --note-default-fg: #713f12;
+  --note-rose-bg: #ffe4e6;
+  --note-rose-fg: #881337;
+  --note-orange-bg: #ffedd5;
+  --note-orange-fg: #7c2d12;
+  --note-amber-bg: #fef3c7;
+  --note-amber-fg: #78350f;
+  --note-lime-bg: #ecfccb;
+  --note-lime-fg: #365314;
+  --note-emerald-bg: #d1fae5;
+  --note-emerald-fg: #064e3b;
+  --note-sky-bg: #e0f2fe;
+  --note-sky-fg: #0c4a6e;
+  --note-indigo-bg: #e0e7ff;
+  --note-indigo-fg: #312e81;
+  --note-violet-bg: #ede9fe;
+  --note-violet-fg: #4c1d95;
+  --note-pink-bg: #fce7f3;
+  --note-pink-fg: #831843;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --note-default-bg: #422006;
+    --note-default-fg: #fef08a;
+    --note-rose-bg: #4c0519;
+    --note-rose-fg: #fecdd3;
+    --note-orange-bg: #431407;
+    --note-orange-fg: #fed7aa;
+    --note-amber-bg: #451a03;
+    --note-amber-fg: #fde68a;
+    --note-lime-bg: #1a2e05;
+    --note-lime-fg: #d9f99d;
+    --note-emerald-bg: #022c22;
+    --note-emerald-fg: #a7f3d0;
+    --note-sky-bg: #082f49;
+    --note-sky-fg: #bae6fd;
+    --note-indigo-bg: #1e1b4b;
+    --note-indigo-fg: #c7d2fe;
+    --note-violet-bg: #2e1065;
+    --note-violet-fg: #ddd6fe;
+    --note-pink-bg: #500724;
+    --note-pink-fg: #fbcfe8;
+  }
+}
+
+:root[data-theme="dark"] {
+  --note-default-bg: #422006;
+  --note-default-fg: #fef08a;
+  --note-rose-bg: #4c0519;
+  --note-rose-fg: #fecdd3;
+  --note-orange-bg: #431407;
+  --note-orange-fg: #fed7aa;
+  --note-amber-bg: #451a03;
+  --note-amber-fg: #fde68a;
+  --note-lime-bg: #1a2e05;
+  --note-lime-fg: #d9f99d;
+  --note-emerald-bg: #022c22;
+  --note-emerald-fg: #a7f3d0;
+  --note-sky-bg: #082f49;
+  --note-sky-fg: #bae6fd;
+  --note-indigo-bg: #1e1b4b;
+  --note-indigo-fg: #c7d2fe;
+  --note-violet-bg: #2e1065;
+  --note-violet-fg: #ddd6fe;
+  --note-pink-bg: #500724;
+  --note-pink-fg: #fbcfe8;
+}
+
+.note-color-default {
+  background-color: var(--note-default-bg);
+  color: var(--note-default-fg);
+}
+.note-color-rose {
+  background-color: var(--note-rose-bg);
+  color: var(--note-rose-fg);
+}
+.note-color-orange {
+  background-color: var(--note-orange-bg);
+  color: var(--note-orange-fg);
+}
+.note-color-amber {
+  background-color: var(--note-amber-bg);
+  color: var(--note-amber-fg);
+}
+.note-color-lime {
+  background-color: var(--note-lime-bg);
+  color: var(--note-lime-fg);
+}
+.note-color-emerald {
+  background-color: var(--note-emerald-bg);
+  color: var(--note-emerald-fg);
+}
+.note-color-sky {
+  background-color: var(--note-sky-bg);
+  color: var(--note-sky-fg);
+}
+.note-color-indigo {
+  background-color: var(--note-indigo-bg);
+  color: var(--note-indigo-fg);
+}
+.note-color-violet {
+  background-color: var(--note-violet-bg);
+  color: var(--note-violet-fg);
+}
+.note-color-pink {
+  background-color: var(--note-pink-bg);
+  color: var(--note-pink-fg);
+}

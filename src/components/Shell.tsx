@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Onboarding } from "@/components/onboarding/Onboarding";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { Dock } from "@/components/dock/Dock";
+import { Notas } from "@/components/notas/Notas";
 import { WebviewStack } from "@/components/panels/WebviewStack";
 import { Settings } from "@/components/settings/Settings";
 import { useStore } from "@/lib/store";
@@ -61,11 +62,12 @@ export function Shell() {
   useNotificationClicks();
   const { state, loading } = useStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [notasOpen, setNotasOpen] = useState(false);
   const activeGroup = state.layout.groups.find((g) => g.id === state.layout.activeGroupId);
   const isSplit = Boolean(activeGroup && activeGroup.serviceIds.length > 1);
   const pinnedByMode = state.dockMode !== "auto";
   const pinned = pinnedByMode || isSplit;
-  const { revealed, show, scheduleHide } = useDockReveal(pinned, settingsOpen);
+  const { revealed, show, scheduleHide } = useDockReveal(pinned, settingsOpen || notasOpen);
   const dockWidth = state.dockMode === "expanded" ? DOCK_WIDTH_EXPANDED : DOCK_WIDTH_COMPACT;
 
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -112,6 +114,7 @@ export function Shell() {
         width={dockWidth}
         loadingServiceIds={loadingServiceIds}
         updateAvailable={updateAvailable}
+        onOpenNotas={() => setNotasOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onMouseEnter={show}
         onMouseLeave={scheduleHide}
@@ -127,6 +130,7 @@ export function Shell() {
 
       <AnimatePresence>
         {settingsOpen && <Settings onClose={() => setSettingsOpen(false)} />}
+        {notasOpen && <Notas onClose={() => setNotasOpen(false)} />}
       </AnimatePresence>
     </div>
   );

@@ -5,6 +5,7 @@ import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { motion } from "motion/react";
 import { getServiceDefinition } from "@/lib/services";
 import { ServiceIcon } from "@/components/ServiceIcon";
+import { NotasLogo } from "@/components/notas/NotasLogo";
 import { useStore } from "@/lib/store";
 import type { ViewGroup } from "@/types/electron-api";
 
@@ -14,6 +15,7 @@ interface DockProps {
   width: number;
   loadingServiceIds: Set<string>;
   updateAvailable?: boolean;
+  onOpenNotas: () => void;
   onOpenSettings: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -25,6 +27,7 @@ export function Dock({
   width,
   loadingServiceIds,
   updateAvailable,
+  onOpenNotas,
   onOpenSettings,
   onMouseEnter,
   onMouseLeave,
@@ -162,6 +165,14 @@ export function Dock({
           }
         />
       )}
+
+      <DockAction
+        expanded={expanded}
+        title="Notas"
+        label="Notas"
+        onClick={onOpenNotas}
+        icon={<NotasLogo size={20} />}
+      />
 
       <DockAction
         expanded={expanded}

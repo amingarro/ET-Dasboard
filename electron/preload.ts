@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { Note } from "./notesStore";
 
 interface NotificationPayload {
   serviceId: string;
@@ -60,5 +61,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.on("store:changed", listener);
       return () => ipcRenderer.removeListener("store:changed", listener);
     },
+  },
+
+  notes: {
+    list: () => ipcRenderer.invoke("notes:list") as Promise<Note[]>,
+    save: (note: Note) => ipcRenderer.invoke("notes:save", note) as Promise<void>,
+    delete: (id: string) => ipcRenderer.invoke("notes:delete", id) as Promise<void>,
   },
 });

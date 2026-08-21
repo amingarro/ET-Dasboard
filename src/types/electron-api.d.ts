@@ -41,6 +41,30 @@ export interface StoreSchema {
   layout: LayoutState;
 }
 
+// Notes are NOT part of StoreSchema/electron-store — each note is its own
+// JSON file on disk, read/written via the separate notes:* IPC channel
+// below. See electron/notesStore.ts for the main-process side.
+export type NoteType = "normal" | "todo";
+
+export interface NoteChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  type: NoteType;
+  color: string;
+  pinned: boolean;
+  bodyHtml: string;
+  checklist: NoteChecklistItem[];
+  deadline: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -62,6 +86,11 @@ declare global {
         getAll: () => Promise<StoreSchema>;
         set: (patch: Partial<StoreSchema>) => Promise<StoreSchema>;
         onChange: (callback: (value: StoreSchema) => void) => () => void;
+      };
+      notes: {
+        list: () => Promise<Note[]>;
+        save: (note: Note) => Promise<void>;
+        delete: (id: string) => Promise<void>;
       };
     };
   }
