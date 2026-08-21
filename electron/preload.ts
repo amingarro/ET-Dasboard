@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { Note } from "./notesStore";
+import type { SyncStatus } from "./driveSync";
 
 interface NotificationPayload {
   serviceId: string;
@@ -67,5 +68,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     list: () => ipcRenderer.invoke("notes:list") as Promise<Note[]>,
     save: (note: Note) => ipcRenderer.invoke("notes:save", note) as Promise<void>,
     delete: (id: string) => ipcRenderer.invoke("notes:delete", id) as Promise<void>,
+  },
+
+  drive: {
+    sync: () => ipcRenderer.invoke("drive:sync") as Promise<{ ok: boolean; uploaded?: number; error?: string }>,
+    onSyncStatus: (callback: (status: SyncStatus) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: SyncStatus) => callback(status);
+      ipcRenderer.on("drive-sync-status", listener);
+      return () => ipcRenderer.removeListener("drive-sync-status", listener);
+    },
   },
 });

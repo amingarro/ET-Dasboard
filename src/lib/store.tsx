@@ -19,6 +19,7 @@ const initialState: StoreSchema = {
     groups: [],
     activeGroupId: null,
   },
+  driveSyncEnabled: false,
 };
 
 interface StoreContextValue {

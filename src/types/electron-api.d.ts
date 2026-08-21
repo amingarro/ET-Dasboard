@@ -39,6 +39,7 @@ export interface StoreSchema {
   dockMode: DockMode;
   services: ServiceConfig[];
   layout: LayoutState;
+  driveSyncEnabled: boolean;
 }
 
 // Notes are NOT part of StoreSchema/electron-store — each note is its own
@@ -63,6 +64,11 @@ export interface Note {
   deadline: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface SyncStatus {
+  phase: "auth" | "waiting" | "uploading" | "done" | "error";
+  message: string;
 }
 
 declare global {
@@ -91,6 +97,10 @@ declare global {
         list: () => Promise<Note[]>;
         save: (note: Note) => Promise<void>;
         delete: (id: string) => Promise<void>;
+      };
+      drive: {
+        sync: () => Promise<{ ok: boolean; uploaded?: number; error?: string }>;
+        onSyncStatus: (callback: (status: SyncStatus) => void) => () => void;
       };
     };
   }

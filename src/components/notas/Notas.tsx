@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CalendarDays, ListChecks, Palette, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { DriveSyncButton } from "@/components/DriveSyncButton";
 import { useNotes } from "@/lib/notes";
 import { NoteCard } from "./NoteCard";
 import { NoteEditorModal } from "./NoteEditorModal";
@@ -102,9 +103,12 @@ export function Notas({ onClose }: NotasProps) {
                 </p>
               </div>
             </div>
-            <button type="button" className="btn btn-soft btn-sm btn-circle" onClick={onClose}>
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <DriveSyncButton />
+              <button type="button" className="btn btn-soft btn-sm btn-circle" onClick={onClose}>
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           <div className="flex h-13 max-w-xl items-center gap-2.5 rounded-2xl border border-base-300 bg-base-100 pr-2 pl-5 shadow-sm">

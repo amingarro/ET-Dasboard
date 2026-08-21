@@ -17,6 +17,30 @@ body {
   background: transparent;
 }
 
+/* daisyUI's stock "light" theme primary (#422ad5) is very high-chroma —
+   fine on a small button, overwhelming on a filled dock icon or a whole row
+   of toggles. Same hue/lightness family as the (unchanged) dark-theme
+   primary, just with chroma pulled back so it reads as an accent instead of
+   a klaxon. Same 3-state pattern as the note colors above, since this is a
+   real daisyUI token and needs to win the cascade in every theme state, not
+   just override a value nothing else sets. */
+:root {
+  --color-primary: oklch(45% 0.16 275);
+  --color-primary-content: oklch(97% 0.02 275);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-primary: #605dff;
+    --color-primary-content: #edf1fe;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-primary: #605dff;
+  --color-primary-content: #edf1fe;
+}
+
 /* Notes' pastel palette (src/components/notas/colors.ts). Defined as plain
    custom properties, not Tailwind's dark: variant — this app's theme is
    driven by the data-theme attribute (see useThemeSync.ts), which Tailwind's
@@ -49,6 +73,12 @@ body {
   --note-violet-fg: #4c1d95;
   --note-pink-bg: #fce7f3;
   --note-pink-fg: #831843;
+
+  /* "Sincronizar con Drive" button — tinted with Drive's own blue, same
+     pastel-bg/saturated-fg pairing as the note colors above. */
+  --drive-btn-bg: #e8f0fe;
+  --drive-btn-bg-hover: #d2e3fc;
+  --drive-btn-fg: #1967d2;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -73,6 +103,10 @@ body {
     --note-violet-fg: #ddd6fe;
     --note-pink-bg: #500724;
     --note-pink-fg: #fbcfe8;
+
+    --drive-btn-bg: #14233b;
+    --drive-btn-bg-hover: #1b2e4d;
+    --drive-btn-fg: #8ab4f8;
   }
 }
 
@@ -97,6 +131,10 @@ body {
   --note-violet-fg: #ddd6fe;
   --note-pink-bg: #500724;
   --note-pink-fg: #fbcfe8;
+
+  --drive-btn-bg: #14233b;
+  --drive-btn-bg-hover: #1b2e4d;
+  --drive-btn-fg: #8ab4f8;
 }
 
 .note-color-default {
@@ -138,4 +176,13 @@ body {
 .note-color-pink {
   background-color: var(--note-pink-bg);
   color: var(--note-pink-fg);
+}
+
+.btn-drive-sync {
+  background-color: var(--drive-btn-bg);
+  color: var(--drive-btn-fg);
+  border-color: transparent;
+}
+.btn-drive-sync:hover {
+  background-color: var(--drive-btn-bg-hover);
 }

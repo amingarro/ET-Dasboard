@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import { defaultServices } from "./services";
 import { getStore, type StoreSchema } from "./store";
 import { deleteNote, listNotes, saveNote, type Note } from "./notesStore";
+import { syncNotesToDrive, type SyncStatus } from "./driveSync";
 
 // This file intentionally does NOT set --ozone-platform or --no-sandbox
 // via app.commandLine.appendSwitch()/process.env — both were tried here and
@@ -16,6 +17,27 @@ import { deleteNote, listNotes, saveNote, type Note } from "./notesStore";
 // the `dev:electron` npm script passes --ozone-platform=x11 as a literal
 // CLI arg to `electron .` for the same reason.
 const isDev = !app.isPackaged;
+
+// .env.local (gitignored) only exists on dev machines and is optional — the
+// real Drive OAuth client is baked into driveSync.ts as a fallback (safe to
+// commit, see the comment there), so packaged builds work without this file.
+// This just lets a local .env.local swap in a different client for testing.
+if (isDev) {
+  try {
+    const raw = fs.readFileSync(path.join(__dirname, "../.env.local"), "utf-8");
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      if (!(key in process.env)) process.env[key] = trimmed.slice(eq + 1).trim();
+    }
+  } catch {
+    // No .env.local yet — Drive sync just reports itself as unconfigured.
+  }
+}
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -417,6 +439,32 @@ app.whenReady().then(async () => {
   ipcMain.handle("notes:list", () => listNotes());
   ipcMain.handle("notes:save", (_event, note: Note) => saveNote(note));
   ipcMain.handle("notes:delete", (_event, id: string) => deleteNote(id));
+
+  // Auto-sync (debounced, on every note edit) and the manual button can both
+  // fire close together — coalesce into whichever sync is already running
+  // instead of letting two overlap and race on the same Drive folder.
+  let inFlightSync: Promise<{ ok: boolean; uploaded?: number; error?: string }> | null = null;
+
+  ipcMain.handle("drive:sync", () => {
+    if (inFlightSync) return inFlightSync;
+
+    inFlightSync = (async () => {
+      try {
+        const result = await syncNotesToDrive((status: SyncStatus) =>
+          mainWindow?.webContents.send("drive-sync-status", status),
+        );
+        return { ok: true as const, uploaded: result.uploaded };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Error desconocido";
+        mainWindow?.webContents.send("drive-sync-status", { phase: "error", message });
+        return { ok: false as const, error: message };
+      } finally {
+        inFlightSync = null;
+      }
+    })();
+
+    return inFlightSync;
+  });
 
   store.onDidAnyChange((newValue) => {
     mainWindow?.webContents.send("store:changed", newValue);

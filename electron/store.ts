@@ -27,6 +27,7 @@ export interface StoreSchema {
   dockMode: DockMode;
   services: ServiceConfig[];
   layout: LayoutState;
+  driveSyncEnabled: boolean;
 }
 
 function soloGroup(serviceId: string): ViewGroup {
@@ -47,6 +48,7 @@ const defaultStoreValues: StoreSchema = {
     groups: defaultServices.map((service) => soloGroup(service.id)),
     activeGroupId: defaultServices[0]?.id ?? null,
   },
+  driveSyncEnabled: false,
 };
 
 export interface AppStore {
@@ -131,6 +133,9 @@ export async function getStore(): Promise<AppStore> {
     }
     if (!current.dockMode) {
       storeInstance.set({ dockMode: "expanded" });
+    }
+    if (current.driveSyncEnabled === undefined) {
+      storeInstance.set({ driveSyncEnabled: false });
     }
 
     // electron-store doesn't backfill missing fields on objects already

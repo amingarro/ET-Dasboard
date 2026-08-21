@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
-import { Bell, BellOff, GripVertical, RefreshCw, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, BellOff, GripVertical, LayoutGrid, RefreshCw, Sun, X } from "lucide-react";
 import { motion } from "motion/react";
 import { SERVICE_DEFINITIONS, getServiceDefinition } from "@/lib/services";
+import { DriveSyncButton } from "@/components/DriveSyncButton";
+import { GoogleDriveLogo } from "@/components/GoogleDriveLogo";
 import { ServiceIcon } from "@/components/ServiceIcon";
 import { useDragReorder } from "@/lib/useDragReorder";
 import { useStore } from "@/lib/store";
 import type { DockMode, ServiceConfig, StoreSchema, UpdateCheckResult } from "@/types/electron-api";
+
+type SettingsCategory = "servicios" | "sync" | "apariencia";
 
 type UpdateState =
   | { status: "idle" }
@@ -29,7 +33,13 @@ interface SettingsProps {
 
 export function Settings({ onClose }: SettingsProps) {
   const { state, update } = useStore();
+  const [category, setCategory] = useState<SettingsCategory>("servicios");
   const [updateState, setUpdateState] = useState<UpdateState>({ status: "checking" });
+  // Separate from updateState on purpose: re-checking from the sidebar footer
+  // must not blank out an already-known "update available" badge while the
+  // new check is in flight — only the very first, pre-any-result check uses
+  // updateState's own "checking" status for that.
+  const [isRechecking, setIsRechecking] = useState(false);
 
   const [releaseUrl, setReleaseUrl] = useState<string | null>(null);
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
@@ -40,12 +50,15 @@ export function Settings({ onClose }: SettingsProps) {
       setReleaseUrl(result.releaseUrl);
       setCurrentVersion(result.currentVersion);
       const delay = Math.max(0, MIN_CHECK_DURATION_MS - (Date.now() - start));
-      setTimeout(() => setUpdateState({ status: "done", result }), delay);
+      setTimeout(() => {
+        setUpdateState({ status: "done", result });
+        setIsRechecking(false);
+      }, delay);
     });
   }
 
   function checkForUpdates() {
-    setUpdateState({ status: "checking" });
+    setIsRechecking(true);
     runUpdateCheck();
   }
 
@@ -136,6 +149,14 @@ export function Settings({ onClose }: SettingsProps) {
     });
   }
 
+  function toggleDriveSync() {
+    const enabling = !state.driveSyncEnabled;
+    update({ driveSyncEnabled: enabling });
+    // Turning it on shouldn't wait for the next note edit to prove it works —
+    // this also doubles as the trigger for the very first login.
+    if (enabling) window.electronAPI.drive.sync();
+  }
+
   function toggleNotifications(id: string) {
     const services = state.services.map((s) =>
       s.id === id ? { ...s, notificationsEnabled: !(s.notificationsEnabled ?? true) } : s,
@@ -175,6 +196,12 @@ export function Settings({ onClose }: SettingsProps) {
     { value: "system", label: "Sistema" },
   ];
 
+  const categories: { id: SettingsCategory; label: string; badge?: string }[] = [
+    { id: "servicios", label: "Servicios del dock", badge: String(enabledCount) },
+    { id: "sync", label: "Sincronización" },
+    { id: "apariencia", label: "Apariencia" },
+  ];
+
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-8"
@@ -184,15 +211,15 @@ export function Settings({ onClose }: SettingsProps) {
       onClick={onClose}
     >
       <motion.div
-        className="card w-full max-w-lg bg-base-100 shadow-xl"
+        className="card max-h-[85vh] w-full max-w-4xl overflow-hidden bg-base-100 shadow-xl"
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ type: "spring", stiffness: 400, damping: 32 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="card-body gap-4">
-          <div className="flex items-center justify-between">
+        <div className="flex h-[640px] max-h-full flex-col">
+          <div className="flex items-center justify-between border-b border-base-300 px-6 py-4">
             <div className="flex items-center gap-2">
               {/* Relative path, not next/image — see notification/page.tsx */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -207,249 +234,296 @@ export function Settings({ onClose }: SettingsProps) {
               <X size={18} />
             </button>
           </div>
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-base-content/70">Tema</p>
-            <div className="join">
-              {themeOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`btn join-item btn-sm ${
-                    state.theme === option.value ? "btn-primary" : "btn-ghost"
-                  }`}
-                  onClick={() => update({ theme: option.value })}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-base-content/70">Menú lateral</p>
-            <div className="join">
-              {dockModeOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`btn join-item btn-sm ${
-                    state.dockMode === option.value ? "btn-primary" : "btn-ghost"
-                  }`}
-                  onClick={() => update({ dockMode: option.value })}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-base-content/50">
-              &quot;Ícono y texto&quot; y &quot;Ícono solo&quot; lo dejan siempre visible.
-              &quot;Automático&quot; lo oculta y aparece al acercar el mouse al borde.
-            </p>
-          </div>
-
-          <p className="text-sm text-base-content/70">
-            Elegí qué páginas querés tener disponibles en el dock.
-          </p>
-
-          <ul className="flex flex-col gap-2">
-            {orderedIds.map((id) => {
-              const service = getServiceDefinition(id);
-              if (!service) return null;
-              const config = state.services.find((s) => s.id === service.id);
-              const isEnabled = config?.enabled ?? false;
-              const notificationsEnabled = config?.notificationsEnabled ?? true;
-              const isLastEnabled = isEnabled && enabledCount <= 1;
-              const { isDragging, ...dragProps } = getItemProps(service.id);
-              return (
-                <li key={service.id} {...dragProps} className={isDragging ? "opacity-40" : undefined}>
-                  <div
-                    className={`flex w-full items-center gap-1 rounded-lg border pr-2 transition-colors ${
-                      isEnabled
-                        ? "border-primary bg-primary/10"
-                        : "border-base-300 hover:bg-base-200"
+          <div className="flex min-h-0 flex-1">
+            {/* Sidebar: categories + version, version stays pinned regardless of
+                which category is open — it's status, not a settings category. */}
+            <div className="flex w-64 shrink-0 flex-col border-r border-base-300 bg-base-200">
+              <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2.5">
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setCategory(cat.id)}
+                    className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13.5px] transition-colors ${
+                      category === cat.id
+                        ? "bg-primary/10 font-semibold text-primary"
+                        : "text-base-content/70 hover:bg-base-300"
                     }`}
                   >
-                    <label
-                      className={`flex flex-1 items-center gap-1 py-1 ${
-                        isLastEnabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-                      }`}
-                    >
-                      <span className="cursor-grab p-2 text-base-content/40 active:cursor-grabbing">
-                        <GripVertical size={16} />
+                    <span className="shrink-0">
+                      {cat.id === "servicios" && <LayoutGrid size={18} />}
+                      {cat.id === "sync" && <GoogleDriveLogo size={17} />}
+                      {cat.id === "apariencia" && <Sun size={18} />}
+                    </span>
+                    <span className="flex-1">{cat.label}</span>
+                    {cat.badge && (
+                      <span className="rounded-full bg-base-content/10 px-2 py-0.5 text-[11px] text-base-content/50">
+                        {cat.badge}
                       </span>
-                      <ServiceIcon service={service} size={20} className="shrink-0" />
-                      <span className="flex-1 py-2 font-medium">{service.name}</span>
-                      <input
-                        type="checkbox"
-                        className="toggle toggle-primary"
-                        checked={isEnabled}
-                        disabled={isLastEnabled}
-                        onChange={() => toggleService(service.id)}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      title={
-                        notificationsEnabled
-                          ? `Apagar notificaciones de ${service.name}`
-                          : `Prender notificaciones de ${service.name}`
-                      }
-                      onClick={() => toggleNotifications(service.id)}
-                      className={`rounded-lg p-2 hover:bg-base-300 ${
-                        notificationsEnabled ? "text-base-content/70" : "text-base-content/30"
-                      }`}
-                    >
-                      {notificationsEnabled ? <Bell size={16} /> : <BellOff size={16} />}
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-
-          {multiGroups.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <p className="text-sm text-base-content/70">
-                Grupos armados (arrastrá un ícono sobre otro en el dock para crear uno nuevo):
-              </p>
-              <ul className="flex flex-col gap-2">
-                {multiGroups.map((group) => (
-                  <li
-                    key={group.id}
-                    className="flex flex-wrap items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
-                  >
-                    {group.serviceIds.map((id) => {
-                      const service = getServiceDefinition(id);
-                      if (!service) return null;
-                      return (
-                        <span
-                          key={id}
-                          className="badge badge-outline gap-1 py-3"
-                        >
-                          <ServiceIcon service={service} size={14} />
-                          {service.name}
-                          <button
-                            type="button"
-                            title={`Sacar ${service.name} del grupo`}
-                            onClick={() => removeFromGroup(group.id, id)}
-                            className="ml-1 text-base-content/50 hover:text-base-content"
-                          >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2 border-t border-base-300 pt-4">
-            <p className="text-sm text-base-content/70">Versión</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium">
-                v{currentVersion ?? (window.electronAPI ? "…" : "")}
-              </span>
-              <span
-                className="aura aura-sm block w-fit rounded-lg"
-                style={
-                  {
-                    color: updateState.status === "checking" ? "var(--color-primary)" : "transparent",
-                    animationPlayState: updateState.status === "checking" ? "running" : "paused",
-                    "--aura-radius": "0.5rem",
-                  } as CSSProperties
-                }
-              >
-                <button
-                  type="button"
-                  className={`btn btn-sm gap-2 ${
-                    updateState.status === "done" && updateState.result.updateAvailable
-                      ? "btn-success"
-                      : "btn-outline"
-                  }`}
-                  // daisyUI gives disabled buttons a ~10%-opacity background by
-                  // design (:is(.btn-disabled, .btn:disabled) background-color:
-                  // color-mix(... 10%, transparent)) — with the aura glowing
-                  // right behind it, that near-transparent face let the glow
-                  // wash straight across the button instead of staying behind
-                  // it. Force an opaque one back while checking.
-                  style={updateState.status === "checking" ? { backgroundColor: "var(--color-base-200)" } : undefined}
-                  disabled={updateState.status === "checking" || updateState.status === "downloading"}
-                  onClick={checkForUpdates}
-                >
-                  <RefreshCw size={14} />
-                  Buscar actualizaciones
-                </button>
-              </span>
-            </div>
-
-            {updateState.status === "done" && updateState.result.error && (
-              <p className="text-xs text-error">No se pudo comprobar: {updateState.result.error}</p>
-            )}
-            {updateState.status === "done" &&
-              !updateState.result.error &&
-              (updateState.result.updateAvailable ? (
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="badge badge-primary badge-sm">Nueva versión</span>
-                  <span className="text-base-content/70">
-                    {updateState.result.latestVersion} disponible
-                  </span>
-                  <button type="button" className="link link-primary" onClick={downloadUpdate}>
-                    Actualizar
+                    )}
                   </button>
-                </div>
-              ) : updateState.result.latestVersion ? (
-                <p className="text-xs text-success">Estás usando la última versión.</p>
-              ) : (
-                <p className="text-xs text-base-content/50">Todavía no hay versiones publicadas.</p>
-              ))}
+                ))}
+              </nav>
 
-            {updateState.status === "downloading" && (
-              <div className="flex items-center gap-2 text-xs">
-                <progress
-                  className="progress progress-primary w-32"
-                  value={updateState.percent}
-                  max={100}
-                />
-                <span className="text-base-content/70">
-                  Descargando… {Math.round(updateState.percent)}%
-                </span>
-              </div>
-            )}
-
-            {updateState.status === "installed" && (
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="badge badge-success badge-sm">Instalada</span>
-                <button
-                  type="button"
-                  className="link link-primary"
-                  onClick={() => window.electronAPI.relaunchApp()}
-                >
-                  Reiniciar ahora
-                </button>
-              </div>
-            )}
-
-            {updateState.status === "download-error" && (
-              <div className="flex flex-col gap-1 text-xs">
-                <p className="text-error">No se pudo actualizar: {updateState.message}</p>
-                {releaseUrl && (
+              <div className="flex shrink-0 flex-col gap-2 border-t border-base-300 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-base-content/60">
+                    Versión v{currentVersion ?? (window.electronAPI ? "…" : "")}
+                  </span>
                   <button
                     type="button"
-                    className="link link-primary w-fit"
-                    onClick={() => window.electronAPI.openExternal(releaseUrl)}
+                    title="Buscar actualizaciones"
+                    className="btn btn-ghost btn-xs btn-circle text-base-content/50"
+                    disabled={updateState.status === "checking" || isRechecking || updateState.status === "downloading"}
+                    onClick={checkForUpdates}
                   >
-                    Descargar manualmente
+                    <RefreshCw
+                      size={13}
+                      className={updateState.status === "checking" || isRechecking ? "animate-spin" : undefined}
+                    />
                   </button>
+                </div>
+
+                {updateState.status === "done" && updateState.result.error && (
+                  <p className="text-[11px] text-error">No se pudo comprobar</p>
+                )}
+                {updateState.status === "done" &&
+                  !updateState.result.error &&
+                  updateState.result.updateAvailable && (
+                    // Grayed out (not hidden) while a recheck is in flight — reads as
+                    // "this is stale, hang on" instead of the badge just vanishing and
+                    // popping back once the new result lands.
+                    <div
+                      className={`flex flex-wrap items-center gap-1.5 text-[11px] transition-[filter,opacity] ${
+                        isRechecking ? "opacity-50 grayscale" : ""
+                      }`}
+                    >
+                      <span className="badge badge-primary badge-xs">Nueva versión</span>
+                      <button
+                        type="button"
+                        className="link link-primary"
+                        disabled={isRechecking}
+                        onClick={downloadUpdate}
+                      >
+                        {updateState.result.latestVersion} · Actualizar
+                      </button>
+                    </div>
+                  )}
+
+                {updateState.status === "downloading" && (
+                  <div className="flex flex-col gap-1">
+                    <progress
+                      className="progress progress-primary w-full"
+                      value={updateState.percent}
+                      max={100}
+                    />
+                    <span className="text-[11px] text-base-content/60">
+                      Descargando… {Math.round(updateState.percent)}%
+                    </span>
+                  </div>
+                )}
+
+                {updateState.status === "installed" && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <span className="badge badge-success badge-xs">Instalada</span>
+                    <button
+                      type="button"
+                      className="link link-primary"
+                      onClick={() => window.electronAPI.relaunchApp()}
+                    >
+                      Reiniciar ahora
+                    </button>
+                  </div>
+                )}
+
+                {updateState.status === "download-error" && (
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[11px] text-error">No se pudo actualizar: {updateState.message}</p>
+                    {releaseUrl && (
+                      <button
+                        type="button"
+                        className="link link-primary w-fit text-[11px]"
+                        onClick={() => window.electronAPI.openExternal(releaseUrl)}
+                      >
+                        Descargar manualmente
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
+            </div>
 
-          <p className="text-xs text-base-content/50">
-            Tiene que quedar al menos una página activa. Los cambios se guardan al instante.
-          </p>
+            {/* Content pane */}
+            <div className="min-w-0 flex-1 overflow-y-auto p-6">
+              {category === "apariencia" && (
+                <div className="flex max-w-lg flex-col gap-6">
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm text-base-content/70">Tema</p>
+                    <div className="join">
+                      {themeOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`btn join-item btn-sm ${
+                            state.theme === option.value ? "btn-primary" : "btn-ghost"
+                          }`}
+                          onClick={() => update({ theme: option.value })}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm text-base-content/70">Menú lateral</p>
+                    <div className="join">
+                      {dockModeOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`btn join-item btn-sm ${
+                            state.dockMode === option.value ? "btn-primary" : "btn-ghost"
+                          }`}
+                          onClick={() => update({ dockMode: option.value })}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-base-content/50">
+                      &quot;Ícono y texto&quot; y &quot;Ícono solo&quot; lo dejan siempre visible.
+                      &quot;Automático&quot; lo oculta y aparece al acercar el mouse al borde.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {category === "sync" && (
+                <div className="flex max-w-lg flex-col gap-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-base-content/70">Sincronizar Notas automáticamente</p>
+                      <p className="text-xs text-base-content/50">
+                        Cada cambio en una nota se sube solo, sin apretar el botón.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-primary shrink-0"
+                      checked={state.driveSyncEnabled}
+                      onChange={toggleDriveSync}
+                    />
+                  </div>
+                  <DriveSyncButton />
+                </div>
+              )}
+
+              {category === "servicios" && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-base-content/70">
+                    Elegí qué páginas querés tener disponibles en el dock.
+                  </p>
+
+                  <ul className="flex flex-col gap-2">
+                    {orderedIds.map((id) => {
+                      const service = getServiceDefinition(id);
+                      if (!service) return null;
+                      const config = state.services.find((s) => s.id === service.id);
+                      const isEnabled = config?.enabled ?? false;
+                      const notificationsEnabled = config?.notificationsEnabled ?? true;
+                      const isLastEnabled = isEnabled && enabledCount <= 1;
+                      const { isDragging, ...dragProps } = getItemProps(service.id);
+                      return (
+                        <li key={service.id} {...dragProps} className={isDragging ? "opacity-40" : undefined}>
+                          <div
+                            className={`flex w-full items-center gap-1 rounded-lg border pr-2 transition-colors ${
+                              isEnabled
+                                ? "border-primary bg-primary/10"
+                                : "border-base-300 hover:bg-base-200"
+                            }`}
+                          >
+                            <label
+                              className={`flex flex-1 items-center gap-1 py-1 ${
+                                isLastEnabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                              }`}
+                            >
+                              <span className="cursor-grab p-2 text-base-content/40 active:cursor-grabbing">
+                                <GripVertical size={16} />
+                              </span>
+                              <ServiceIcon service={service} size={20} className="shrink-0" />
+                              <span className="flex-1 py-2 font-medium">{service.name}</span>
+                              <input
+                                type="checkbox"
+                                className="toggle toggle-primary"
+                                checked={isEnabled}
+                                disabled={isLastEnabled}
+                                onChange={() => toggleService(service.id)}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              title={
+                                notificationsEnabled
+                                  ? `Apagar notificaciones de ${service.name}`
+                                  : `Prender notificaciones de ${service.name}`
+                              }
+                              onClick={() => toggleNotifications(service.id)}
+                              className={`rounded-lg p-2 hover:bg-base-300 ${
+                                notificationsEnabled ? "text-base-content/70" : "text-base-content/30"
+                              }`}
+                            >
+                              {notificationsEnabled ? <Bell size={16} /> : <BellOff size={16} />}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {multiGroups.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs text-base-content/50">
+                        Grupos armados (arrastrá un ícono sobre otro en el dock para crear uno nuevo):
+                      </p>
+                      <ul className="flex flex-col gap-2">
+                        {multiGroups.map((group) => (
+                          <li
+                            key={group.id}
+                            className="flex flex-wrap items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+                          >
+                            {group.serviceIds.map((id) => {
+                              const service = getServiceDefinition(id);
+                              if (!service) return null;
+                              return (
+                                <span key={id} className="badge badge-outline gap-1 py-3">
+                                  <ServiceIcon service={service} size={14} />
+                                  {service.name}
+                                  <button
+                                    type="button"
+                                    title={`Sacar ${service.name} del grupo`}
+                                    onClick={() => removeFromGroup(group.id, id)}
+                                    className="ml-1 text-base-content/50 hover:text-base-content"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-base-content/50">
+                    Tiene que quedar al menos una página activa. Los cambios se guardan al instante.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </motion.div>
     </motion.div>
