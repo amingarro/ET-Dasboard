@@ -2,6 +2,11 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.14] - 2026-08-24
+
+- Slack se suma al dock como un servicio más, con su ícono mostrando los cuatro colores reales del logo.
+- Nuevo widget de Cumpleaños arriba de Notas: cargá nombre y fecha de nacimiento de cada persona y el ícono te avisa (con nombre y todo) el día que alguien de la oficina cumple años.
+
 ## [0.1.13] - 2026-08-21
 
 - Notas ahora se puede sincronizar con una carpeta en Google Drive, a mano con un botón o automáticamente en cada edición (activable en Configuración).
