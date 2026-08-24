@@ -101,7 +101,7 @@ export function Settings({ onClose }: SettingsProps) {
       const existing = state.services.find((s) => s.id === id);
       return existing
         ? { ...existing, order: index }
-        : { id, enabled: false, order: index, notificationsEnabled: true };
+        : { id, enabled: false, order: index, notificationsEnabled: true, lastUrl: null };
     });
     update({ services });
   }
@@ -123,7 +123,7 @@ export function Settings({ onClose }: SettingsProps) {
     } else {
       services = [
         ...state.services,
-        { id, enabled: true, order: state.services.length, notificationsEnabled: true },
+        { id, enabled: true, order: state.services.length, notificationsEnabled: true, lastUrl: null },
       ];
     }
 

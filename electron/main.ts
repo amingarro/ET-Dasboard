@@ -1,4 +1,15 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, session, shell, Tray } from "electron";
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  Menu,
+  nativeImage,
+  screen,
+  session,
+  shell,
+  Tray,
+} from "electron";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -377,6 +388,56 @@ app.whenReady().then(async () => {
     if (contents.getType() !== "webview") return;
     contents.on("did-fail-load", (_e, errorCode, errorDescription, validatedURL) => {
       console.log("[webview] FAILED:", errorCode, errorDescription, validatedURL);
+    });
+
+    // Electron shows no context menu at all by default, for a webview or
+    // otherwise — every embedded page silently swallowed right-clicks until
+    // this was wired up by hand.
+    contents.on("context-menu", (_e, params) => {
+      const items: Electron.MenuItemConstructorOptions[] = [];
+
+      if (params.linkURL) {
+        items.push(
+          { label: "Abrir enlace en el navegador", click: () => shell.openExternal(params.linkURL) },
+          { label: "Copiar dirección del enlace", click: () => clipboard.writeText(params.linkURL) },
+          { type: "separator" },
+        );
+      }
+
+      if (params.isEditable) {
+        items.push(
+          { label: "Cortar", enabled: params.editFlags.canCut, click: () => contents.cut() },
+          { label: "Copiar", enabled: params.editFlags.canCopy, click: () => contents.copy() },
+          { label: "Pegar", enabled: params.editFlags.canPaste, click: () => contents.paste() },
+          {
+            label: "Seleccionar todo",
+            enabled: params.editFlags.canSelectAll,
+            click: () => contents.selectAll(),
+          },
+          { type: "separator" },
+        );
+      } else if (params.selectionText) {
+        items.push(
+          { label: "Copiar", click: () => clipboard.writeText(params.selectionText) },
+          { type: "separator" },
+        );
+      }
+
+      items.push(
+        {
+          label: "Atrás",
+          enabled: contents.navigationHistory.canGoBack(),
+          click: () => contents.navigationHistory.goBack(),
+        },
+        {
+          label: "Adelante",
+          enabled: contents.navigationHistory.canGoForward(),
+          click: () => contents.navigationHistory.goForward(),
+        },
+        { label: "Recargar", click: () => contents.reload() },
+      );
+
+      Menu.buildFromTemplate(items).popup();
     });
   });
 

@@ -5,6 +5,10 @@ export interface ServiceConfig {
   enabled: boolean;
   order: number;
   notificationsEnabled: boolean;
+  // Last URL the webview navigated to (in-page or full), so relaunching the
+  // app returns each service to where you left it instead of its default
+  // landing page. null until the first navigation is recorded.
+  lastUrl: string | null;
 }
 
 export interface ViewGroup {
@@ -43,6 +47,7 @@ const defaultStoreValues: StoreSchema = {
     enabled: true,
     order: index,
     notificationsEnabled: true,
+    lastUrl: null,
   })),
   layout: {
     groups: defaultServices.map((service) => soloGroup(service.id)),
@@ -140,10 +145,11 @@ export async function getStore(): Promise<AppStore> {
 
     // electron-store doesn't backfill missing fields on objects already
     // persisted inside an array, so services saved before notificationsEnabled
-    // existed load without it.
+    // (or lastUrl) existed load without them.
     const migratedServices = current.services.map((s) => ({
       ...s,
       notificationsEnabled: s.notificationsEnabled ?? true,
+      lastUrl: s.lastUrl ?? null,
     }));
     if (JSON.stringify(migratedServices) !== JSON.stringify(current.services)) {
       storeInstance.set({ services: migratedServices });

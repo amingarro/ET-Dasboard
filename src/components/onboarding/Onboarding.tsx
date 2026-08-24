@@ -37,6 +37,7 @@ export function Onboarding() {
       enabled: enabled.has(id),
       order: index,
       notificationsEnabled: true,
+      lastUrl: null,
     }));
     const enabledIds = order.filter((id) => enabled.has(id));
 

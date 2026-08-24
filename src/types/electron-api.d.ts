@@ -3,6 +3,7 @@ export interface ServiceConfig {
   enabled: boolean;
   order: number;
   notificationsEnabled: boolean;
+  lastUrl: string | null;
 }
 
 export interface ViewGroup {

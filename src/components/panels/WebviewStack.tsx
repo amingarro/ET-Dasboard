@@ -16,6 +16,10 @@ import { SplitLayout } from "./SplitLayout";
 
 const GAP = 5;
 const RADIUS = 12;
+// How long to wait after the last navigation before persisting it — SPAs
+// like Gmail/GitHub fire did-navigate-in-page repeatedly while a page is
+// settling, and only the final URL is worth writing to disk.
+const NAVIGATE_SAVE_DEBOUNCE_MS = 1500;
 
 type Corner = "tl" | "tr" | "bl" | "br";
 const CORNERS: Corner[] = ["tl", "tr", "bl", "br"];
@@ -58,7 +62,13 @@ interface ServiceWebviewProps {
   isVisible: boolean;
   preloadPath?: string;
   notificationsEnabled: boolean;
+  initialUrl: string | null;
   onLoadingChange: (id: string, loading: boolean) => void;
+  onNavigate: (id: string, url: string) => void;
+}
+
+interface WebviewNavigateEvent extends Event {
+  url: string;
 }
 
 function ServiceWebview({
@@ -67,9 +77,16 @@ function ServiceWebview({
   isVisible,
   preloadPath,
   notificationsEnabled,
+  initialUrl,
   onLoadingChange,
+  onNavigate,
 }: ServiceWebviewProps) {
   const ref = useRef<HTMLElement | null>(null);
+  // Only ever consulted once, at mount — the whole point is remembering
+  // where the app was left last time it fully quit, not tracking every live
+  // navigation back into the src attribute (which would fight the webview's
+  // own in-progress navigation on every debounced save, see onNavigate below).
+  const [initialSrc] = useState(() => initialUrl || service.url);
 
   useEffect(() => {
     const el = ref.current;
@@ -89,22 +106,31 @@ function ServiceWebview({
 
     const handleStartLoading = () => onLoadingChange(service.id, true);
     const handleStopLoading = () => onLoadingChange(service.id, false);
+    const handleNavigate = (e: Event) => onNavigate(service.id, (e as WebviewNavigateEvent).url);
 
     el.addEventListener("ipc-message", handleIpcMessage);
     el.addEventListener("did-start-loading", handleStartLoading);
     el.addEventListener("did-stop-loading", handleStopLoading);
+    // did-navigate: full page loads. did-navigate-in-page: pushState/hash
+    // navigation, which is how Gmail/GitHub/Trello move between screens
+    // without a real page load — without this, "remember where I was"
+    // would only ever see each service's very first landing URL.
+    el.addEventListener("did-navigate", handleNavigate);
+    el.addEventListener("did-navigate-in-page", handleNavigate);
     return () => {
       el.removeEventListener("ipc-message", handleIpcMessage);
       el.removeEventListener("did-start-loading", handleStartLoading);
       el.removeEventListener("did-stop-loading", handleStopLoading);
+      el.removeEventListener("did-navigate", handleNavigate);
+      el.removeEventListener("did-navigate-in-page", handleNavigate);
       onLoadingChange(service.id, false);
     };
-  }, [service.id, notificationsEnabled, onLoadingChange]);
+  }, [service.id, notificationsEnabled, onLoadingChange, onNavigate]);
 
   return (
     <webview
       ref={ref}
-      src={service.url}
+      src={initialSrc}
       partition={service.partition}
       preload={preloadPath}
       className="absolute transition-opacity duration-150 ease-out"
@@ -130,6 +156,36 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
   useEffect(() => {
     window.electronAPI.getWebviewPreloadPath().then(setPreloadPath);
   }, []);
+
+  // Latest state via ref, not a useCallback dependency — handleNavigate must
+  // stay referentially stable so the listener-attaching effect in
+  // ServiceWebview above doesn't tear down and reattach on every unrelated
+  // store change (theme, other services' toggles, etc.).
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+  const navigateSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+    const timers = navigateSaveTimers.current;
+    return () => {
+      Object.values(timers).forEach(clearTimeout);
+    };
+  }, []);
+
+  const handleNavigate = useCallback(
+    (id: string, url: string) => {
+      if (navigateSaveTimers.current[id]) clearTimeout(navigateSaveTimers.current[id]);
+      navigateSaveTimers.current[id] = setTimeout(() => {
+        const current = stateRef.current;
+        if (current.services.find((s) => s.id === id)?.lastUrl === url) return;
+        const services = current.services.map((s) => (s.id === id ? { ...s, lastUrl: url } : s));
+        update({ services });
+      }, NAVIGATE_SAVE_DEBOUNCE_MS);
+    },
+    [update],
+  );
 
   const enabledServices = useMemo(
     () =>
@@ -231,7 +287,9 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
               notificationsEnabled={
                 state.services.find((s) => s.id === service.id)?.notificationsEnabled ?? true
               }
+              initialUrl={state.services.find((s) => s.id === service.id)?.lastUrl ?? null}
               onLoadingChange={onLoadingChange}
+              onNavigate={handleNavigate}
             />
 
             {isVisible && (
