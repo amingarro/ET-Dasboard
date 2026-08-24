@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import { defaultServices } from "./services";
 import { getStore, type StoreSchema } from "./store";
 import { deleteNote, listNotes, saveNote, type Note } from "./notesStore";
+import { deleteBirthday, listBirthdays, saveBirthday, type Birthday } from "./birthdaysStore";
 import { syncNotesToDrive, type SyncStatus } from "./driveSync";
 
 // This file intentionally does NOT set --ozone-platform or --no-sandbox
@@ -439,6 +440,12 @@ app.whenReady().then(async () => {
   ipcMain.handle("notes:list", () => listNotes());
   ipcMain.handle("notes:save", (_event, note: Note) => saveNote(note));
   ipcMain.handle("notes:delete", (_event, id: string) => deleteNote(id));
+
+  // Birthdays: a single flat JSON file (not one-per-note) since it's just a
+  // small name+date list — see birthdaysStore.ts.
+  ipcMain.handle("birthdays:list", () => listBirthdays());
+  ipcMain.handle("birthdays:save", (_event, birthday: Birthday) => saveBirthday(birthday));
+  ipcMain.handle("birthdays:delete", (_event, id: string) => deleteBirthday(id));
 
   // Auto-sync (debounced, on every note edit) and the manual button can both
   // fire close together — coalesce into whichever sync is already running

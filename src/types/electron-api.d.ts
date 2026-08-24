@@ -66,6 +66,14 @@ export interface Note {
   updatedAt: number;
 }
 
+// Same deal as Note above: a flat JSON file, not part of StoreSchema — see
+// electron/birthdaysStore.ts.
+export interface Birthday {
+  id: string;
+  name: string;
+  date: string; // "YYYY-MM-DD"
+}
+
 export interface SyncStatus {
   phase: "auth" | "waiting" | "uploading" | "done" | "error";
   message: string;
@@ -97,6 +105,11 @@ declare global {
         list: () => Promise<Note[]>;
         save: (note: Note) => Promise<void>;
         delete: (id: string) => Promise<void>;
+      };
+      birthdays: {
+        list: () => Promise<Birthday[]>;
+        save: (birthday: Birthday) => Promise<Birthday[]>;
+        delete: (id: string) => Promise<Birthday[]>;
       };
       drive: {
         sync: () => Promise<{ ok: boolean; uploaded?: number; error?: string }>;

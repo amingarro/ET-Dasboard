@@ -49,4 +49,11 @@ export const defaultServices: ServiceDefinition[] = [
     partition: "persist:atlassian",
     headerStripDomains: ["atlassian.com", "atlassian.net", "id.atlassian.com"],
   },
+  {
+    id: "slack",
+    name: "Slack",
+    url: "https://app.slack.com/client",
+    partition: "persist:slack",
+    headerStripDomains: ["slack.com", "app.slack.com"],
+  },
 ];

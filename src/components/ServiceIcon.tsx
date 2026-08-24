@@ -24,8 +24,8 @@ function isNearBlack(hex: string): boolean {
 export function ServiceIcon({ service, size, className }: ServiceIconProps) {
   const boxSize = size + 4;
   const glyphSize = Math.round(size * 0.75);
-  const inverted = isNearBlack(service.color);
-  const bg = inverted ? "#f3f4f6" : service.color;
+  const inverted = !service.iconBackground && isNearBlack(service.color);
+  const bg = service.iconBackground ?? (inverted ? "#f3f4f6" : service.color);
   const glyphColor = inverted ? service.color : "#fff";
 
   return (
@@ -33,7 +33,7 @@ export function ServiceIcon({ service, size, className }: ServiceIconProps) {
       className={`inline-flex shrink-0 items-center justify-center rounded-md ${
         inverted ? "ring-1 ring-black/10" : ""
       } ${className ?? ""}`}
-      style={{ width: boxSize, height: boxSize, backgroundColor: bg }}
+      style={{ width: boxSize, height: boxSize, background: bg }}
     >
       <FontAwesomeIcon icon={service.icon} style={{ width: glyphSize, height: glyphSize, color: glyphColor }} />
     </span>

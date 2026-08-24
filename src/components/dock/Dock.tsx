@@ -1,12 +1,14 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
-import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
+import { Cake, SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { motion } from "motion/react";
 import { getServiceDefinition } from "@/lib/services";
 import { ServiceIcon } from "@/components/ServiceIcon";
 import { NotasLogo } from "@/components/notas/NotasLogo";
 import { useStore } from "@/lib/store";
+import { useBirthdays } from "@/lib/birthdays";
+import { getTodaysBirthdays } from "@/lib/birthdayUtils";
 import type { ViewGroup } from "@/types/electron-api";
 
 interface DockProps {
@@ -16,6 +18,7 @@ interface DockProps {
   loadingServiceIds: Set<string>;
   updateAvailable?: boolean;
   onOpenNotas: () => void;
+  onOpenBirthdays: () => void;
   onOpenSettings: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -28,11 +31,21 @@ export function Dock({
   loadingServiceIds,
   updateAvailable,
   onOpenNotas,
+  onOpenBirthdays,
   onOpenSettings,
   onMouseEnter,
   onMouseLeave,
 }: DockProps) {
   const { state, update } = useStore();
+  const { birthdays } = useBirthdays();
+  const todaysBirthdays = getTodaysBirthdays(birthdays);
+  const todaysNames = todaysBirthdays.map((b) => b.name);
+  const birthdayTitle =
+    todaysNames.length === 0
+      ? "Cumpleaños"
+      : todaysNames.length === 1
+        ? `¡Hoy ${todaysNames[0]} cumple años!`
+        : `¡Hoy cumplen años: ${todaysNames.join(", ")}!`;
   const draggedGroupIdRef = useRef<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
@@ -165,6 +178,25 @@ export function Dock({
           }
         />
       )}
+
+      <DockAction
+        expanded={expanded}
+        title={birthdayTitle}
+        label={todaysBirthdays.length > 0 ? birthdayTitle : "Cumpleaños"}
+        onClick={onOpenBirthdays}
+        icon={
+          <span className="relative shrink-0">
+            <Cake size={20} />
+            {todaysBirthdays.length > 0 && (
+              <span className="aura aura-xs absolute -bottom-2 -right-2 block w-fit -rotate-3 rounded-full text-primary bg-primary/20">
+                <span className="badge badge-primary badge-xs px-1.5 text-[9px] font-bold text-white">
+                  🎂
+                </span>
+              </span>
+            )}
+          </span>
+        }
+      />
 
       <DockAction
         expanded={expanded}

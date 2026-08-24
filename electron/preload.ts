@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { Note } from "./notesStore";
+import type { Birthday } from "./birthdaysStore";
 import type { SyncStatus } from "./driveSync";
 
 interface NotificationPayload {
@@ -68,6 +69,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     list: () => ipcRenderer.invoke("notes:list") as Promise<Note[]>,
     save: (note: Note) => ipcRenderer.invoke("notes:save", note) as Promise<void>,
     delete: (id: string) => ipcRenderer.invoke("notes:delete", id) as Promise<void>,
+  },
+
+  birthdays: {
+    list: () => ipcRenderer.invoke("birthdays:list") as Promise<Birthday[]>,
+    save: (birthday: Birthday) => ipcRenderer.invoke("birthdays:save", birthday) as Promise<Birthday[]>,
+    delete: (id: string) => ipcRenderer.invoke("birthdays:delete", id) as Promise<Birthday[]>,
   },
 
   drive: {

@@ -5,6 +5,7 @@ import {
   faBitbucket,
   faGithub,
   faGoogle,
+  faSlack,
   faTrello,
 } from "@fortawesome/free-brands-svg-icons";
 
@@ -15,6 +16,9 @@ export interface ServiceDefinition {
   partition: string;
   icon: IconDefinition;
   color: string;
+  // CSS `background` value overriding the flat `color` badge background —
+  // for brand marks made of multiple colors (e.g. Slack's four-color logo).
+  iconBackground?: string;
 }
 
 export const SERVICE_DEFINITIONS: ServiceDefinition[] = [
@@ -67,6 +71,19 @@ export const SERVICE_DEFINITIONS: ServiceDefinition[] = [
     partition: "persist:atlassian",
     icon: faAtlassian,
     color: "#2684ff",
+  },
+  {
+    id: "slack",
+    name: "Slack",
+    url: "https://app.slack.com/client",
+    partition: "persist:slack",
+    icon: faSlack,
+    color: "#4a154b",
+    // Matches the real logo's quadrant layout: blue top-left, green
+    // top-right, yellow bottom-right, red/pink bottom-left. `from 0deg`
+    // starts the sweep pointing up, going clockwise.
+    iconBackground:
+      "conic-gradient(from 0deg, #2eb67d 0deg 90deg, #ecb22e 90deg 180deg, #e01e5a 180deg 270deg, #36c5f0 270deg 360deg)",
   },
 ];
 
