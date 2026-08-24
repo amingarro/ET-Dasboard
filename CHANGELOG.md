@@ -2,6 +2,11 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.15] - 2026-08-24
+
+- Ahora se puede hacer click derecho en las páginas: aparece un menú con Atrás/Adelante/Recargar, cortar/copiar/pegar en campos de texto, y abrir/copiar enlaces.
+- Cada servicio recuerda la página en la que estabas — al cerrar la app y volver a abrirla, cada uno arranca donde lo dejaste en vez de volver siempre a su pantalla inicial.
+
 ## [0.1.14] - 2026-08-24
 
 - Slack se suma al dock como un servicio más, con su ícono mostrando los cuatro colores reales del logo.
