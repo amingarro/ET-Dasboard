@@ -2,10 +2,12 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
-## [0.1.15] - 2026-08-24
+## [0.1.15] - 2026-08-25
 
 - Ahora se puede hacer click derecho en las páginas: aparece un menú con Atrás/Adelante/Recargar, cortar/copiar/pegar en campos de texto, y abrir/copiar enlaces.
 - Cada servicio recuerda la página en la que estabas — al cerrar la app y volver a abrirla, cada uno arranca donde lo dejaste en vez de volver siempre a su pantalla inicial.
+- Nuevo control flotante en la esquina de cada página embebida, con botones de Inicio, Atrás, Adelante y Copiar URL — para cuando una página te deja en un lugar sin salida (por ejemplo, un Figma abierto desde un ticket de Jira) y no hay forma de volver.
+- Cumpleaños ya no es un botón ni una ventana aparte: ahora es una pestaña dentro de Configuración, y sumamos un aviso real (una notificación, no solo el ícono con la torta) para cuando le toca cumplir años a alguien.
 
 ## [0.1.14] - 2026-08-24
 
