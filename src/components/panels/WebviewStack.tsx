@@ -13,13 +13,28 @@ import type { Layout } from "react-resizable-panels";
 import { getServiceDefinition, type ServiceDefinition } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import { SplitLayout } from "./SplitLayout";
+import { WebviewToolbar } from "./WebviewToolbar";
 
 const GAP = 5;
 const RADIUS = 12;
+// Offset of the floating nav toolbar from the frame edge, and its fixed
+// height (collapsed and expanded are the same height — it only grows
+// sideways — so split-mode positioning can anchor off it without measuring
+// the DOM; see splitToolbarPosition below).
+const TOOLBAR_MARGIN = 10;
+const TOOLBAR_HEIGHT = 40;
 // How long to wait after the last navigation before persisting it — SPAs
 // like Gmail/GitHub fire did-navigate-in-page repeatedly while a page is
 // settling, and only the final URL is worth writing to disk.
 const NAVIGATE_SAVE_DEBOUNCE_MS = 1500;
+// How many settled URLs the floating toolbar's Back/Forward remembers per
+// service. Deliberately app-owned rather than the webview's own
+// goBack()/goForward() — embedded SPAs (Figma inside a Jira ticket, in
+// particular) can leave native history in a state where "back" does
+// nothing useful, which is the exact dead-end this toolbar exists to
+// escape. A short, predictable breadcrumb trail beats a long unpredictable
+// one for that purpose.
+const MAX_TOOLBAR_HISTORY = 5;
 
 type Corner = "tl" | "tr" | "bl" | "br";
 const CORNERS: Corner[] = ["tl", "tr", "bl", "br"];
@@ -51,9 +66,30 @@ function splitCornerPosition(corner: Corner, rect: DOMRect): CSSProperties {
   return { top, left };
 }
 
+/** Toolbar position when the webview fills the container minus GAP — bottom-left
+ * corner, offset inward by TOOLBAR_MARGIN. */
+function fullscreenToolbarPosition(): CSSProperties {
+  return { bottom: GAP + TOOLBAR_MARGIN, left: GAP + TOOLBAR_MARGIN };
+}
+
+/** Toolbar position from a measured split-panel rect, same coordinate space
+ * as splitCornerPosition above. */
+function splitToolbarPosition(rect: DOMRect): CSSProperties {
+  return {
+    top: rect.top + rect.height - GAP - TOOLBAR_MARGIN - TOOLBAR_HEIGHT,
+    left: rect.left + GAP + TOOLBAR_MARGIN,
+  };
+}
+
 interface IpcMessageEvent extends Event {
   channel: string;
   args: unknown[];
+}
+
+/** A service's own settled-URL breadcrumb trail — see MAX_TOOLBAR_HISTORY. */
+interface ToolbarHistory {
+  entries: string[];
+  index: number;
 }
 
 interface ServiceWebviewProps {
@@ -65,6 +101,7 @@ interface ServiceWebviewProps {
   initialUrl: string | null;
   onLoadingChange: (id: string, loading: boolean) => void;
   onNavigate: (id: string, url: string) => void;
+  onRefReady: (id: string, el: WebviewElement | null) => void;
 }
 
 interface WebviewNavigateEvent extends Event {
@@ -80,6 +117,7 @@ function ServiceWebview({
   initialUrl,
   onLoadingChange,
   onNavigate,
+  onRefReady,
 }: ServiceWebviewProps) {
   const ref = useRef<HTMLElement | null>(null);
   // Only ever consulted once, at mount — the whole point is remembering
@@ -87,6 +125,14 @@ function ServiceWebview({
   // navigation back into the src attribute (which would fight the webview's
   // own in-progress navigation on every debounced save, see onNavigate below).
   const [initialSrc] = useState(() => initialUrl || service.url);
+
+  // Separate from the listener effect below so a mute toggle (which changes
+  // notificationsEnabled, a dep of that effect) doesn't bounce the ref the
+  // floating toolbar's Home/Back/Forward/Copy buttons hold onto.
+  useEffect(() => {
+    onRefReady(service.id, ref.current as WebviewElement | null);
+    return () => onRefReady(service.id, null);
+  }, [service.id, onRefReady]);
 
   useEffect(() => {
     const el = ref.current;
@@ -153,6 +199,77 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
   const [rects, setRects] = useState<Record<string, DOMRect>>({});
   const [preloadPath, setPreloadPath] = useState<string | undefined>(undefined);
 
+  // Per-service webview handles for the floating nav toolbar (Home/Back/
+  // Forward/Copy URL) — a plain ref map, not state, since the elements
+  // themselves never need to trigger a re-render on their own.
+  const webviewRefs = useRef<Record<string, WebviewElement | null>>({});
+  const [expandedToolbars, setExpandedToolbars] = useState<Record<string, boolean>>({});
+  const [toolbarHistory, setToolbarHistory] = useState<Record<string, ToolbarHistory>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    };
+  }, []);
+
+  const handleRefReady = useCallback((id: string, el: WebviewElement | null) => {
+    webviewRefs.current[id] = el;
+  }, []);
+
+  // Records a settled navigation into the toolbar's own short breadcrumb
+  // trail (see MAX_TOOLBAR_HISTORY). A no-op when `url` is exactly where
+  // Back/Forward just parked the pointer, so stepping through the trail
+  // doesn't re-push the entry it lands on as if it were a fresh visit.
+  const pushToolbarHistory = useCallback((id: string, url: string) => {
+    setToolbarHistory((prev) => {
+      const h = prev[id];
+      if (h && h.entries[h.index] === url) return prev;
+      const kept = h ? h.entries.slice(0, h.index + 1) : [];
+      const entries = [...kept, url].slice(-MAX_TOOLBAR_HISTORY);
+      return { ...prev, [id]: { entries, index: entries.length - 1 } };
+    });
+  }, []);
+
+  const toggleToolbar = useCallback((id: string) => {
+    setExpandedToolbars((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  const handleHome = useCallback((id: string, url: string) => {
+    webviewRefs.current[id]?.loadURL(url);
+  }, []);
+
+  const handleBack = useCallback((id: string) => {
+    setToolbarHistory((prev) => {
+      const h = prev[id];
+      if (!h || h.index <= 0) return prev;
+      const index = h.index - 1;
+      webviewRefs.current[id]?.loadURL(h.entries[index]);
+      return { ...prev, [id]: { ...h, index } };
+    });
+  }, []);
+
+  const handleForward = useCallback((id: string) => {
+    setToolbarHistory((prev) => {
+      const h = prev[id];
+      if (!h || h.index >= h.entries.length - 1) return prev;
+      const index = h.index + 1;
+      webviewRefs.current[id]?.loadURL(h.entries[index]);
+      return { ...prev, [id]: { ...h, index } };
+    });
+  }, []);
+
+  const handleCopyUrl = useCallback((id: string) => {
+    const url = webviewRefs.current[id]?.getURL();
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(id);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopiedId(null), 1500);
+    });
+  }, []);
+
   useEffect(() => {
     window.electronAPI.getWebviewPreloadPath().then(setPreloadPath);
   }, []);
@@ -178,13 +295,14 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
     (id: string, url: string) => {
       if (navigateSaveTimers.current[id]) clearTimeout(navigateSaveTimers.current[id]);
       navigateSaveTimers.current[id] = setTimeout(() => {
+        pushToolbarHistory(id, url);
         const current = stateRef.current;
         if (current.services.find((s) => s.id === id)?.lastUrl === url) return;
         const services = current.services.map((s) => (s.id === id ? { ...s, lastUrl: url } : s));
         update({ services });
       }, NAVIGATE_SAVE_DEBOUNCE_MS);
     },
-    [update],
+    [update, pushToolbarHistory],
   );
 
   const enabledServices = useMemo(
@@ -290,6 +408,7 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
               initialUrl={state.services.find((s) => s.id === service.id)?.lastUrl ?? null}
               onLoadingChange={onLoadingChange}
               onNavigate={handleNavigate}
+              onRefReady={handleRefReady}
             />
 
             {isVisible && (
@@ -313,6 +432,25 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
                     }}
                   />
                 ))}
+                <WebviewToolbar
+                  style={
+                    isFullscreenActive
+                      ? fullscreenToolbarPosition()
+                      : splitToolbarPosition(splitRect as DOMRect)
+                  }
+                  expanded={Boolean(expandedToolbars[service.id])}
+                  onToggleExpand={() => toggleToolbar(service.id)}
+                  onHome={() => handleHome(service.id, service.url)}
+                  onBack={() => handleBack(service.id)}
+                  onForward={() => handleForward(service.id)}
+                  onCopyUrl={() => handleCopyUrl(service.id)}
+                  canGoBack={Boolean(toolbarHistory[service.id] && toolbarHistory[service.id].index > 0)}
+                  canGoForward={Boolean(
+                    toolbarHistory[service.id] &&
+                      toolbarHistory[service.id].index < toolbarHistory[service.id].entries.length - 1,
+                  )}
+                  copied={copiedId === service.id}
+                />
               </>
             )}
           </Fragment>
