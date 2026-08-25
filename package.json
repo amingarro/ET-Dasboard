@@ -32,7 +32,8 @@
     "publish": {
       "provider": "github",
       "owner": "amingarro",
-      "repo": "ET-Dasboard"
+      "repo": "ET-Dasboard",
+      "draft": false
     },
     "linux": {
       "icon": "build/icons",
