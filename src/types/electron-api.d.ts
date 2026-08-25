@@ -41,6 +41,7 @@ export interface StoreSchema {
   services: ServiceConfig[];
   layout: LayoutState;
   driveSyncEnabled: boolean;
+  birthdayNotificationsEnabled: boolean;
 }
 
 // Notes are NOT part of StoreSchema/electron-store — each note is its own

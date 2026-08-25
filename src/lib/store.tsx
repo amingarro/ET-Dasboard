@@ -20,6 +20,7 @@ const initialState: StoreSchema = {
     activeGroupId: null,
   },
   driveSyncEnabled: false,
+  birthdayNotificationsEnabled: true,
 };
 
 interface StoreContextValue {

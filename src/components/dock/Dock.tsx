@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
-import { Cake, SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
+import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { motion } from "motion/react";
 import { getServiceDefinition } from "@/lib/services";
 import { ServiceIcon } from "@/components/ServiceIcon";
@@ -18,7 +18,6 @@ interface DockProps {
   loadingServiceIds: Set<string>;
   updateAvailable?: boolean;
   onOpenNotas: () => void;
-  onOpenBirthdays: () => void;
   onOpenSettings: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -31,7 +30,6 @@ export function Dock({
   loadingServiceIds,
   updateAvailable,
   onOpenNotas,
-  onOpenBirthdays,
   onOpenSettings,
   onMouseEnter,
   onMouseLeave,
@@ -40,12 +38,12 @@ export function Dock({
   const { birthdays } = useBirthdays();
   const todaysBirthdays = getTodaysBirthdays(birthdays);
   const todaysNames = todaysBirthdays.map((b) => b.name);
-  const birthdayTitle =
+  const settingsTitle =
     todaysNames.length === 0
-      ? "Cumpleaños"
+      ? "Configuración"
       : todaysNames.length === 1
-        ? `¡Hoy ${todaysNames[0]} cumple años!`
-        : `¡Hoy cumplen años: ${todaysNames.join(", ")}!`;
+        ? `Configuración — ¡Hoy ${todaysNames[0]} cumple años!`
+        : `Configuración — ¡Hoy cumplen años: ${todaysNames.join(", ")}!`;
   const draggedGroupIdRef = useRef<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
@@ -181,25 +179,6 @@ export function Dock({
 
       <DockAction
         expanded={expanded}
-        title={birthdayTitle}
-        label={todaysBirthdays.length > 0 ? birthdayTitle : "Cumpleaños"}
-        onClick={onOpenBirthdays}
-        icon={
-          <span className="relative shrink-0">
-            <Cake size={20} />
-            {todaysBirthdays.length > 0 && (
-              <span className="aura aura-xs absolute -bottom-2 -right-2 block w-fit -rotate-3 rounded-full text-primary bg-primary/20">
-                <span className="badge badge-primary badge-xs px-1.5 text-[9px] font-bold text-white">
-                  🎂
-                </span>
-              </span>
-            )}
-          </span>
-        }
-      />
-
-      <DockAction
-        expanded={expanded}
         title="Notas"
         label="Notas"
         onClick={onOpenNotas}
@@ -208,7 +187,7 @@ export function Dock({
 
       <DockAction
         expanded={expanded}
-        title="Configuración"
+        title={settingsTitle}
         label="Configuración"
         onClick={onOpenSettings}
         icon={
@@ -219,6 +198,13 @@ export function Dock({
                 full explanation. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="app-icon.png" alt="" width={28} height={28} className="rounded-md" />
+            {todaysBirthdays.length > 0 && (
+              <span className="aura aura-xs absolute -top-2 -right-2 block w-fit rotate-3 rounded-full text-primary bg-primary/20">
+                <span className="badge badge-primary badge-xs px-1.5 text-[9px] font-bold text-white">
+                  🎂
+                </span>
+              </span>
+            )}
             {updateAvailable && (
               <span className="aura aura-xs absolute -bottom-2 -right-2 block w-fit -rotate-3 rounded-full text-success bg-success/20">
                 <span className="badge badge-success badge-xs px-1.5 text-[9px] font-bold text-white">
