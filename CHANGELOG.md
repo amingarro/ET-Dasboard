@@ -2,6 +2,10 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.17] - 2026-08-27
+
+- Si el corrector ortográfico subraya una palabra mal escrita en cualquier página embebida, ahora el clic derecho muestra las sugerencias de corrección (con un click la reemplaza) y una opción para agregarla al diccionario.
+
 ## [0.1.16] - 2026-08-25
 
 - Nuevo control flotante en la esquina de cada página embebida, con botones de Inicio, Atrás, Adelante y Copiar URL — para cuando una página te deja en un lugar sin salida (por ejemplo, un Figma abierto desde un ticket de Jira) y no hay forma de volver.
