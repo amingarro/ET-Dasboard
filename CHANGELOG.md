@@ -2,7 +2,7 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
-## [0.1.17] - 2026-08-27
+## [0.1.18] - 2026-08-27
 
 - Si el corrector ortográfico subraya una palabra mal escrita en cualquier página embebida, ahora el clic derecho muestra las sugerencias de corrección (con un click la reemplaza) y una opción para agregarla al diccionario.
 
