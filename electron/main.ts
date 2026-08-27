@@ -404,6 +404,23 @@ app.whenReady().then(async () => {
         );
       }
 
+      if (params.isEditable && params.misspelledWord) {
+        if (params.dictionarySuggestions.length > 0) {
+          for (const suggestion of params.dictionarySuggestions) {
+            items.push({ label: suggestion, click: () => contents.replaceMisspelling(suggestion) });
+          }
+        } else {
+          items.push({ label: "Sin sugerencias", enabled: false });
+        }
+        items.push(
+          {
+            label: "Añadir al diccionario",
+            click: () => contents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+          },
+          { type: "separator" },
+        );
+      }
+
       if (params.isEditable) {
         items.push(
           { label: "Cortar", enabled: params.editFlags.canCut, click: () => contents.cut() },
