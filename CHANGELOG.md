@@ -2,6 +2,11 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.19] - 2026-08-31
+
+- Si una página embebida (Gmail, GitHub, Bitbucket, Trello, Harvest, Jira, Slack) no llega a cargar — por ejemplo por falta de internet — ya no queda la pantalla en blanco sin aviso: ahora aparece un cartel con el motivo, reintenta sola cada 30 segundos con una cuenta regresiva a la vista, y hay un botón para reintentar al toque.
+- La actualización con un click (bajar la nueva versión e instalarla sola) ahora también funciona en Windows, no solo en Linux.
+
 ## [0.1.18] - 2026-08-27
 
 - Si el corrector ortográfico subraya una palabra mal escrita en cualquier página embebida, ahora el clic derecho muestra las sugerencias de corrección (con un click la reemplaza) y una opción para agregarla al diccionario.
