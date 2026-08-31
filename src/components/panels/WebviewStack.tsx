@@ -10,6 +10,7 @@ import {
   type CSSProperties,
 } from "react";
 import type { Layout } from "react-resizable-panels";
+import { RefreshCw, WifiOff } from "lucide-react";
 import { getServiceDefinition, type ServiceDefinition } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import { SplitLayout } from "./SplitLayout";
@@ -35,6 +36,14 @@ const NAVIGATE_SAVE_DEBOUNCE_MS = 1500;
 // escape. A short, predictable breadcrumb trail beats a long unpredictable
 // one for that purpose.
 const MAX_TOOLBAR_HISTORY = 5;
+// How long to wait between automatic reload attempts once a webview fails to
+// load (e.g. no internet) — also the number the countdown badge counts down
+// from.
+const RETRY_INTERVAL_SECONDS = 30;
+// Electron's ERR_ABORTED — fires for perfectly normal cases (a navigation
+// superseded by another, a download, a redirect chain) rather than an actual
+// failure, so it must not surface as an error overlay.
+const ERROR_CODE_ABORTED = -3;
 
 type Corner = "tl" | "tr" | "bl" | "br";
 const CORNERS: Corner[] = ["tl", "tr", "bl", "br"];
@@ -108,6 +117,18 @@ interface WebviewNavigateEvent extends Event {
   url: string;
 }
 
+interface WebviewFailLoadEvent extends Event {
+  errorCode: number;
+  errorDescription: string;
+  validatedURL: string;
+  isMainFrame: boolean;
+}
+
+interface LoadError {
+  code: number;
+  description: string;
+}
+
 function ServiceWebview({
   service,
   style,
@@ -125,6 +146,56 @@ function ServiceWebview({
   // navigation back into the src attribute (which would fight the webview's
   // own in-progress navigation on every debounced save, see onNavigate below).
   const [initialSrc] = useState(() => initialUrl || service.url);
+
+  const [loadError, setLoadError] = useState<LoadError | null>(null);
+  const [retrySeconds, setRetrySeconds] = useState<number | null>(null);
+  const retryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearRetryInterval = useCallback(() => {
+    if (retryIntervalRef.current) {
+      clearInterval(retryIntervalRef.current);
+      retryIntervalRef.current = null;
+    }
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    clearRetryInterval();
+    setRetrySeconds(null);
+    (ref.current as WebviewElement | null)?.reload();
+  }, [clearRetryInterval]);
+
+  // Reset the countdown display whenever loadError changes identity — a new
+  // error, or a fresh one re-raised by a failed retry (setLoadError always
+  // produces a new object). Adjusting state during render, per
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes,
+  // rather than in an effect body, since this is purely derived from
+  // loadError and shouldn't cause an extra commit.
+  const [prevLoadError, setPrevLoadError] = useState(loadError);
+  if (loadError !== prevLoadError) {
+    setPrevLoadError(loadError);
+    setRetrySeconds(loadError ? RETRY_INTERVAL_SECONDS : null);
+  }
+
+  // Runs the actual countdown ticker while a load error is present, and
+  // fires a reload when it hits zero. Torn down entirely once did-finish-load
+  // clears loadError.
+  useEffect(() => {
+    if (!loadError) {
+      clearRetryInterval();
+      return;
+    }
+    retryIntervalRef.current = setInterval(() => {
+      setRetrySeconds((prev) => {
+        if (prev === null) return prev;
+        if (prev <= 1) {
+          (ref.current as WebviewElement | null)?.reload();
+          return RETRY_INTERVAL_SECONDS;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return clearRetryInterval;
+  }, [loadError, clearRetryInterval]);
 
   // Separate from the listener effect below so a mute toggle (which changes
   // notificationsEnabled, a dep of that effect) doesn't bounce the ref the
@@ -150,9 +221,27 @@ function ServiceWebview({
       });
     }
 
-    const handleStartLoading = () => onLoadingChange(service.id, true);
+    // Clearing loadError here (rather than on did-finish-load) is
+    // deliberate: Electron fires did-finish-load even for its own internal
+    // chrome-error://chromewebdata page that a failed navigation lands on,
+    // immediately after did-fail-load — clearing there would erase the error
+    // state in the same tick it was set. Starting a *new* attempt is the
+    // right moment to optimistically clear it instead: did-fail-load will
+    // just set it again if that attempt also fails.
+    const handleStartLoading = () => {
+      onLoadingChange(service.id, true);
+      setLoadError(null);
+    };
     const handleStopLoading = () => onLoadingChange(service.id, false);
     const handleNavigate = (e: Event) => onNavigate(service.id, (e as WebviewNavigateEvent).url);
+    const handleFailLoad = (e: Event) => {
+      const event = e as WebviewFailLoadEvent;
+      // Only the main-frame navigation matters — a failed sub-resource
+      // (favicon, analytics beacon, ad) isn't the page itself being down.
+      // ERR_ABORTED is excluded too (see ERROR_CODE_ABORTED above).
+      if (!event.isMainFrame || event.errorCode === ERROR_CODE_ABORTED) return;
+      setLoadError({ code: event.errorCode, description: event.errorDescription });
+    };
 
     el.addEventListener("ipc-message", handleIpcMessage);
     el.addEventListener("did-start-loading", handleStartLoading);
@@ -163,30 +252,55 @@ function ServiceWebview({
     // would only ever see each service's very first landing URL.
     el.addEventListener("did-navigate", handleNavigate);
     el.addEventListener("did-navigate-in-page", handleNavigate);
+    el.addEventListener("did-fail-load", handleFailLoad);
     return () => {
       el.removeEventListener("ipc-message", handleIpcMessage);
       el.removeEventListener("did-start-loading", handleStartLoading);
       el.removeEventListener("did-stop-loading", handleStopLoading);
       el.removeEventListener("did-navigate", handleNavigate);
       el.removeEventListener("did-navigate-in-page", handleNavigate);
+      el.removeEventListener("did-fail-load", handleFailLoad);
       onLoadingChange(service.id, false);
     };
   }, [service.id, notificationsEnabled, onLoadingChange, onNavigate]);
 
   return (
-    <webview
-      ref={ref}
-      src={initialSrc}
-      partition={service.partition}
-      preload={preloadPath}
-      className="absolute transition-opacity duration-150 ease-out"
-      style={{
-        ...style,
-        visibility: isVisible ? "visible" : "hidden",
-        pointerEvents: isVisible ? "auto" : "none",
-        opacity: isVisible ? 1 : 0,
-      }}
-    />
+    <>
+      <webview
+        ref={ref}
+        src={initialSrc}
+        partition={service.partition}
+        preload={preloadPath}
+        className="absolute transition-opacity duration-150 ease-out"
+        style={{
+          ...style,
+          visibility: isVisible ? "visible" : "hidden",
+          pointerEvents: isVisible ? "auto" : "none",
+          opacity: isVisible ? 1 : 0,
+        }}
+      />
+      {isVisible && loadError && (
+        <div
+          className="absolute z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-base-100 p-6 text-center"
+          style={style}
+        >
+          <WifiOff size={36} className="text-base-content/40" />
+          <div className="space-y-1">
+            <p className="font-medium text-base-content">No se pudo cargar {service.name}</p>
+            <p className="text-sm text-base-content/60">{loadError.description}</p>
+          </div>
+          <button type="button" onClick={handleRetry} className="btn btn-sm btn-primary gap-2">
+            <RefreshCw size={14} />
+            Reintentar ahora
+          </button>
+          {retrySeconds !== null && (
+            <p className="text-xs text-base-content/50">
+              Reintentando automáticamente en {retrySeconds}s…
+            </p>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 

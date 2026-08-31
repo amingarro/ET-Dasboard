@@ -8,6 +8,7 @@
 interface WebviewElement extends HTMLElement {
   loadURL(url: string): Promise<void>;
   getURL(): string;
+  reload(): void;
 }
 
 declare namespace JSX {
