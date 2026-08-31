@@ -197,6 +197,52 @@ async function downloadAndInstallDebUpdate(onProgress: (percent: number) => void
   });
 }
 
+// Unlike a .deb, the NSIS installer this app ships as on Windows *can*
+// replace itself while running — but not while running, period: Windows
+// locks the executable of a running process, so the installer can't
+// overwrite it until this app has fully exited. So only the download
+// happens here; installing is deferred to the "Reiniciar ahora" step
+// (relaunch-app below), which is the one that actually calls app.exit().
+// The installer is run with "/S --force-run" — silent install, then launch
+// the new version itself once done (electron-builder's NSIS template
+// supports this combination natively; it's the same mechanism
+// electron-updater's own NsisUpdater uses under the hood).
+let pendingWindowsInstallerPath: string | null = null;
+
+async function downloadWindowsInstaller(onProgress: (percent: number) => void): Promise<void> {
+  const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
+    headers: { Accept: "application/vnd.github+json" },
+  });
+  if (!res.ok) throw new Error(`GitHub API respondió ${res.status}`);
+  const data = (await res.json()) as { assets?: GithubAsset[] };
+  const exeAsset = data.assets?.find((a) => a.name.endsWith(".exe"));
+  if (!exeAsset) throw new Error("No se encontró el instalador en la última versión");
+
+  const tempPath = path.join(os.tmpdir(), exeAsset.name);
+  const downloadRes = await fetch(exeAsset.browser_download_url);
+  if (!downloadRes.ok || !downloadRes.body) {
+    throw new Error(`No se pudo descargar el instalador (${downloadRes.status})`);
+  }
+
+  const total = Number(downloadRes.headers.get("content-length")) || exeAsset.size;
+  let downloaded = 0;
+  const fileHandle = fs.createWriteStream(tempPath);
+  const reader = downloadRes.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      downloaded += value.length;
+      fileHandle.write(value);
+      if (total > 0) onProgress((downloaded / total) * 100);
+    }
+  } finally {
+    await new Promise<void>((resolve) => fileHandle.end(resolve));
+  }
+
+  pendingWindowsInstallerPath = tempPath;
+}
+
 function stripFrameHeaders(ses: Electron.Session) {
   ses.webRequest.onHeadersReceived((details, callback) => {
     const headers = details.responseHeaders ?? {};
@@ -487,13 +533,19 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("download-update", async () => {
     if (!app.isPackaged) return { error: "No disponible en modo desarrollo." };
-    if (process.platform !== "linux") {
-      return { error: "La actualización con un click todavía solo está disponible en Linux." };
+    if (process.platform !== "linux" && process.platform !== "win32") {
+      return { error: "La actualización con un click todavía solo está disponible en Linux y Windows." };
     }
     try {
-      await downloadAndInstallDebUpdate((percent) => {
-        mainWindow?.webContents.send("update-download-progress", percent);
-      });
+      if (process.platform === "linux") {
+        await downloadAndInstallDebUpdate((percent) => {
+          mainWindow?.webContents.send("update-download-progress", percent);
+        });
+      } else {
+        await downloadWindowsInstaller((percent) => {
+          mainWindow?.webContents.send("update-download-progress", percent);
+        });
+      }
       mainWindow?.webContents.send("update-installed");
       return { error: null };
     } catch (err) {
@@ -503,6 +555,11 @@ app.whenReady().then(async () => {
     }
   });
   ipcMain.on("relaunch-app", () => {
+    if (pendingWindowsInstallerPath) {
+      spawn(pendingWindowsInstallerPath, ["/S", "--force-run"], { detached: true, stdio: "ignore" }).unref();
+      app.exit();
+      return;
+    }
     app.relaunch();
     app.exit();
   });
