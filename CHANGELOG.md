@@ -2,6 +2,14 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.20] - 2026-09-01
+
+- Ahora se pueden agregar fotos a las notas y verlas en grande con un visor a pantalla completa, navegando entre todas las de esa nota con flechas (también las del teclado); cuando una nota tiene varias, en el listado se muestran en un carrusel compacto en vez de apiladas una debajo de la otra.
+- La sincronización de Notas con Google Drive ahora es en las dos direcciones (antes solo subía cambios locales, nunca bajaba los hechos en otro dispositivo) y las fotos también se sincronizan, en su propia subcarpeta; si hay fotos que ya están en Drive pero todavía no se bajaron a este dispositivo, aparece un aviso arriba de la lista de notas ofreciendo descargarlas.
+- El editor de notas se agrandó, y la fecha límite junto con los botones de formato (negrita, itálica, lista, insertar imagen) ahora quedan en una sola fila prolija en vez de en dos filas desparejas.
+- El selector de color de una nota ahora es un botón con forma de pincel que despliega los colores con una animación al pasar el mouse, en vez de una fila fija de círculos siempre visible.
+- Los colores de las notas en modo oscuro se ven más vivos y fáciles de distinguir entre sí, y los elementos de adentro de cada nota ahora combinan con el color elegido en vez de verse siempre grises.
+
 ## [0.1.19] - 2026-08-31
 
 - Si una página embebida (Gmail, GitHub, Bitbucket, Trello, Harvest, Jira, Slack) no llega a cargar — por ejemplo por falta de internet — ya no queda la pantalla en blanco sin aviso: ahora aparece un cartel con el motivo, reintenta sola cada 30 segundos con una cuenta regresiva a la vista, y hay un botón para reintentar al toque.

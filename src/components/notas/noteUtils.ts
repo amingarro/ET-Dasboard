@@ -56,3 +56,29 @@ export function getDeadlineBreakdown(deadline: string): DeadlineBreakdown {
     minutes: totalMinutes % 60,
   };
 }
+
+export interface SplitNoteBody {
+  // bodyHtml sin las imágenes — solo el texto/listas, para no volver a
+  // renderarlas inline (RichTextEditor.tsx las envuelve en .note-image-wrap).
+  textHtml: string;
+  // Nombres de archivo (`{uuid}.{ext}`) en el mismo orden en que aparecen en
+  // la nota, listos para `note-image://{filename}`.
+  imageFilenames: string[];
+}
+
+// NoteCard.tsx usa esto para mostrar las imágenes en un carrusel de tamaño
+// fijo en vez de dejar que N imágenes de ancho completo apilen la tarjeta a
+// una altura enorme. Recorre el DOM en vez de usar una regex porque es un
+// parseo de HTML mucho más confiable, aunque acá el HTML sea de confianza.
+export function splitNoteBody(bodyHtml: string): SplitNoteBody {
+  const container = document.createElement("div");
+  container.innerHTML = bodyHtml;
+  const imageFilenames: string[] = [];
+  container.querySelectorAll(".note-image-wrap").forEach((wrap) => {
+    const src = wrap.querySelector("img")?.getAttribute("src") ?? "";
+    const match = /^note-image:\/\/(.+)$/.exec(src);
+    if (match) imageFilenames.push(match[1]);
+    wrap.remove();
+  });
+  return { textHtml: container.innerHTML, imageFilenames };
+}

@@ -69,6 +69,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     list: () => ipcRenderer.invoke("notes:list") as Promise<Note[]>,
     save: (note: Note) => ipcRenderer.invoke("notes:save", note) as Promise<void>,
     delete: (id: string) => ipcRenderer.invoke("notes:delete", id) as Promise<void>,
+    saveImage: (dataBase64: string, fileName: string) =>
+      ipcRenderer.invoke("notes:save-image", { dataBase64, fileName }) as Promise<{ filename: string }>,
+    onChanged: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on("notes-changed", listener);
+      return () => ipcRenderer.removeListener("notes-changed", listener);
+    },
   },
 
   birthdays: {
@@ -83,6 +90,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
       const listener = (_event: Electron.IpcRendererEvent, status: SyncStatus) => callback(status);
       ipcRenderer.on("drive-sync-status", listener);
       return () => ipcRenderer.removeListener("drive-sync-status", listener);
+    },
+    downloadPendingImages: (filenames: string[]) =>
+      ipcRenderer.invoke("drive:download-pending-images", filenames) as Promise<{ ok: boolean; error?: string }>,
+    onImagesPending: (callback: (filenames: string[]) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, filenames: string[]) => callback(filenames);
+      ipcRenderer.on("drive-images-pending", listener);
+      return () => ipcRenderer.removeListener("drive-images-pending", listener);
     },
   },
 });

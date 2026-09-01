@@ -5,9 +5,11 @@ import { CalendarDays, ListChecks, Palette, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { DriveSyncButton } from "@/components/DriveSyncButton";
 import { useNotes } from "@/lib/notes";
+import { ImageLightbox } from "./ImageLightbox";
 import { NoteCard } from "./NoteCard";
 import { NoteEditorModal } from "./NoteEditorModal";
 import { NotasLogo } from "./NotasLogo";
+import { PendingImagesPrompt } from "./PendingImagesPrompt";
 import { createNote } from "./noteUtils";
 import type { Note, NoteType } from "@/types/electron-api";
 
@@ -16,12 +18,18 @@ interface NotasProps {
 }
 
 export function Notas({ onClose }: NotasProps) {
-  const { notes, loading, saveNote, deleteNote } = useNotes();
+  const { notes, loading, refreshToken, saveNote, deleteNote } = useNotes();
   // isNew: true only for a note just created via createAndOpen below — that
   // (and only that) is what NoteEditorModal is allowed to auto-delete if
   // closed untouched. Opening an EXISTING note to just look at it and
   // closing again must never delete it — isNew stays false for that path.
   const [editorState, setEditorState] = useState<{ note: Note; isNew: boolean } | null>(null);
+  // Se abre desde el carrusel de imágenes de una NoteCard (ver
+  // NoteImageCarousel.tsx) — "Editar" dentro del lightbox pasa de este
+  // estado al de editorState de arriba en vez de tener su propia navegación.
+  const [lightboxState, setLightboxState] = useState<{ note: Note; filenames: string[]; startIndex: number } | null>(
+    null,
+  );
 
   // Creates the note immediately (title "NUEVA NOTA", autosaves from the
   // very first keystroke) instead of holding it as unsaved draft state in
@@ -61,12 +69,13 @@ export function Notas({ onClose }: NotasProps) {
         {list.map((note) => (
           // break-inside-avoid on the wrapper (not NoteCard itself) keeps a
           // card from being split across a column break.
-          <div key={note.id} className="mb-4 break-inside-avoid">
+          <div key={`${note.id}-${refreshToken}`} className="mb-4 break-inside-avoid">
             <NoteCard
               note={note}
               onOpen={() => setEditorState({ note, isNew: false })}
               onTogglePin={() => togglePin(note)}
               onToggleChecklistItem={(itemId) => toggleChecklistItem(note, itemId)}
+              onOpenImages={(filenames, startIndex) => setLightboxState({ note, filenames, startIndex })}
             />
           </div>
         ))}
@@ -110,6 +119,8 @@ export function Notas({ onClose }: NotasProps) {
               </button>
             </div>
           </div>
+
+          <PendingImagesPrompt />
 
           <div className="flex h-13 max-w-xl items-center gap-2.5 rounded-2xl border border-base-300 bg-base-100 pr-2 pl-5 shadow-sm">
             <button
@@ -166,11 +177,30 @@ export function Notas({ onClose }: NotasProps) {
       <AnimatePresence>
         {editorState && (
           <NoteEditorModal
+            key={refreshToken}
             note={editorState.note}
             isNew={editorState.isNew}
             onClose={() => setEditorState(null)}
             onSave={saveNote}
             onDelete={deleteNote}
+            onViewImage={(filenames, startIndex) =>
+              setLightboxState({ note: editorState.note, filenames, startIndex })
+            }
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {lightboxState && (
+          <ImageLightbox
+            note={lightboxState.note}
+            filenames={lightboxState.filenames}
+            startIndex={lightboxState.startIndex}
+            onClose={() => setLightboxState(null)}
+            onEdit={() => {
+              setEditorState({ note: lightboxState.note, isNew: false });
+              setLightboxState(null);
+            }}
           />
         )}
       </AnimatePresence>

@@ -5,12 +5,15 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  net,
+  protocol,
   screen,
   session,
   shell,
   Tray,
 } from "electron";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
@@ -19,7 +22,17 @@ import { defaultServices } from "./services";
 import { getStore, type StoreSchema } from "./store";
 import { deleteNote, listNotes, saveNote, type Note } from "./notesStore";
 import { deleteBirthday, listBirthdays, saveBirthday, type Birthday } from "./birthdaysStore";
-import { syncNotesToDrive, type SyncStatus } from "./driveSync";
+import { downloadPendingImages, syncNotes, type SyncStatus } from "./driveSync";
+import { getImagePath, saveImageBytes } from "./imagesStore";
+import { markNoteDeleted } from "./syncState";
+
+// Privilegiado para que se comporte como un origen seguro normal (fetchable,
+// sin sorpresas de CORS) dentro del renderer, que a su vez carga sobre
+// file://. Debe correr antes de app.whenReady() — Electron ignora este
+// llamado después.
+protocol.registerSchemesAsPrivileged([
+  { scheme: "note-image", privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
 
 // This file intentionally does NOT set --ozone-platform or --no-sandbox
 // via app.commandLine.appendSwitch()/process.env — both were tried here and
@@ -426,6 +439,16 @@ app.whenReady().then(async () => {
   // the detached DevTools window in dev.
   Menu.setApplicationMenu(null);
 
+  // Sirve las imágenes de las notas directo desde la caché local — el
+  // renderer nunca toca el filesystem por su cuenta (el preload está
+  // sandboxeado, ver las notas sobre preload.ts en otra parte de este
+  // codebase), solo apunta un <img> a note-image://<id>.<ext> y esto lo resuelve.
+  protocol.handle("note-image", async (request) => {
+    const filename = decodeURIComponent(new URL(request.url).hostname);
+    const filePath = await getImagePath(filename);
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
+
   for (const service of defaultServices) {
     stripFrameHeaders(session.fromPartition(service.partition));
   }
@@ -574,13 +597,39 @@ app.whenReady().then(async () => {
   // electron-store config above — see notesStore.ts for why.
   ipcMain.handle("notes:list", () => listNotes());
   ipcMain.handle("notes:save", (_event, note: Note) => saveNote(note));
-  ipcMain.handle("notes:delete", (_event, id: string) => deleteNote(id));
+  ipcMain.handle("notes:delete", async (_event, id: string) => {
+    await deleteNote(id);
+    // La marca como tombstone para que el próximo sync también borre la
+    // copia en Drive, en vez de tratar "desapareció local, sigue en Drive"
+    // como "hay que volver a bajarla".
+    await markNoteDeleted(id);
+  });
+
+  // El renderer no puede tocar el filesystem por su cuenta (el preload está
+  // sandboxeado) — el editor de texto enriquecido manda los bytes crudos de
+  // la imagen y recibe de vuelta el id que debe referenciar como
+  // note-image://{id}.{ext} en el bodyHtml de la nota.
+  ipcMain.handle("notes:save-image", async (_event, payload: { dataBase64: string; fileName: string }) => {
+    const ext = (path.extname(payload.fileName).slice(1) || "png").toLowerCase();
+    const id = randomUUID();
+    const filename = `${id}.${ext}`;
+    await saveImageBytes(filename, Buffer.from(payload.dataBase64, "base64"));
+    return { filename };
+  });
 
   // Birthdays: a single flat JSON file (not one-per-note) since it's just a
   // small name+date list — see birthdaysStore.ts.
   ipcMain.handle("birthdays:list", () => listBirthdays());
   ipcMain.handle("birthdays:save", (_event, birthday: Birthday) => saveBirthday(birthday));
   ipcMain.handle("birthdays:delete", (_event, id: string) => deleteBirthday(id));
+
+  // Los errores de Node/fetch (fallas de red, una respuesta malformada, etc.)
+  // vienen en inglés — nunca hay que mandarlos tal cual a la UI. El detalle
+  // real igual va a la terminal para debuggear.
+  function describeSyncError(err: unknown): string {
+    console.error("[drive sync]", err);
+    return "No se pudo completar la sincronización con Drive. Mirá la consola de la app para más detalles.";
+  }
 
   // Auto-sync (debounced, on every note edit) and the manual button can both
   // fire close together — coalesce into whichever sync is already running
@@ -592,12 +641,23 @@ app.whenReady().then(async () => {
 
     inFlightSync = (async () => {
       try {
-        const result = await syncNotesToDrive((status: SyncStatus) =>
+        const result = await syncNotes((status: SyncStatus) =>
           mainWindow?.webContents.send("drive-sync-status", status),
         );
+        // Un pull puede haber sobrescrito archivos de notas locales sin que
+        // el renderer se entere — de otro modo solo conoce su propia lista
+        // en memoria.
+        if (result.downloaded > 0) mainWindow?.webContents.send("notes-changed");
+        if (result.pendingImages.length > 0) {
+          mainWindow?.webContents.send("drive-images-pending", result.pendingImages);
+        }
         return { ok: true as const, uploaded: result.uploaded };
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Error desconocido";
+        // Los errores que lanzamos nosotros (driveSync.ts) ya están en
+        // español; cualquier otra cosa (un fetch/TypeError crudo de Node)
+        // viene en inglés y nunca debe llegar así a la UI — se loguea para
+        // debuggear y se muestra un mensaje fijo en español en su lugar.
+        const message = describeSyncError(err);
         mainWindow?.webContents.send("drive-sync-status", { phase: "error", message });
         return { ok: false as const, error: message };
       } finally {
@@ -606,6 +666,20 @@ app.whenReady().then(async () => {
     })();
 
     return inFlightSync;
+  });
+
+  ipcMain.handle("drive:download-pending-images", async (_event, filenames: string[]) => {
+    try {
+      await downloadPendingImages(filenames, (status: SyncStatus) =>
+        mainWindow?.webContents.send("drive-sync-status", status),
+      );
+      mainWindow?.webContents.send("notes-changed");
+      return { ok: true as const };
+    } catch (err) {
+      const message = describeSyncError(err);
+      mainWindow?.webContents.send("drive-sync-status", { phase: "error", message });
+      return { ok: false as const, error: message };
+    }
   });
 
   store.onDidAnyChange((newValue) => {

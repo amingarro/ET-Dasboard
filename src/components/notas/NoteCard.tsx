@@ -1,9 +1,10 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { Clock, Pin } from "lucide-react";
 import { getNoteColorClassName } from "./colors";
-import { getDeadlineBreakdown, getDeadlineStatus } from "./noteUtils";
+import { getDeadlineBreakdown, getDeadlineStatus, splitNoteBody } from "./noteUtils";
+import { NoteImageCarousel } from "./NoteImageCarousel";
 import type { Note } from "@/types/electron-api";
 
 interface NoteCardProps {
@@ -11,10 +12,18 @@ interface NoteCardProps {
   onOpen: () => void;
   onTogglePin: () => void;
   onToggleChecklistItem: (itemId: string) => void;
+  onOpenImages: (imageFilenames: string[], startIndex: number) => void;
 }
 
-export function NoteCard({ note, onOpen, onTogglePin, onToggleChecklistItem }: NoteCardProps) {
+export function NoteCard({ note, onOpen, onTogglePin, onToggleChecklistItem, onOpenImages }: NoteCardProps) {
   const colorClassName = getNoteColorClassName(note.color);
+  // Separado del bodyHtml para no volver a renderar las imágenes inline (ver
+  // NoteImageCarousel.tsx) — si no, N fotos a ancho completo apilan la
+  // tarjeta a una altura enorme.
+  const { textHtml, imageFilenames } = useMemo(
+    () => (note.type === "normal" ? splitNoteBody(note.bodyHtml) : { textHtml: note.bodyHtml, imageFilenames: [] }),
+    [note.type, note.bodyHtml],
+  );
   const doneCount = note.checklist.filter((item) => item.done).length;
   const progressPct = note.checklist.length
     ? Math.round((doneCount / note.checklist.length) * 100)
@@ -76,16 +85,21 @@ export function NoteCard({ note, onOpen, onTogglePin, onToggleChecklistItem }: N
         {note.deadline && <DeadlineBadge deadline={note.deadline} />}
 
         {note.type === "normal" ? (
-          // bodyHtml is produced by RichTextEditor's own contenteditable —
-          // not third-party/untrusted HTML, so dangerouslySetInnerHTML is safe here.
-          <div
-            // No explicit text color here (deliberately) — it inherits the
-            // card's own color from the .note-color-* class above. Tailwind's
-            // preflight strips default list styling, restored manually since
-            // there's no @tailwindcss/typography plugin.
-            className="text-sm [&_ul]:list-disc [&_ul]:pl-5"
-            dangerouslySetInnerHTML={{ __html: note.bodyHtml }}
-          />
+          <>
+            {imageFilenames.length > 0 && (
+              <NoteImageCarousel filenames={imageFilenames} onImageClick={(index) => onOpenImages(imageFilenames, index)} />
+            )}
+            {/* bodyHtml es producido por el propio contenteditable de RichTextEditor —
+                no es HTML de terceros sin confiar, así que dangerouslySetInnerHTML es seguro acá. */}
+            <div
+              // No explicit text color here (deliberately) — it inherits the
+              // card's own color from the .note-color-* class above. Tailwind's
+              // preflight strips default list styling, restored manually since
+              // there's no @tailwindcss/typography plugin.
+              className="text-sm [&_ul]:list-disc [&_ul]:pl-5"
+              dangerouslySetInnerHTML={{ __html: textHtml }}
+            />
+          </>
         ) : (
           <div className="flex flex-col gap-2">
             {note.checklist.length > 0 && (

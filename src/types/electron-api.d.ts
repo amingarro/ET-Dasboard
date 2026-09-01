@@ -77,7 +77,7 @@ export interface Birthday {
 }
 
 export interface SyncStatus {
-  phase: "auth" | "waiting" | "uploading" | "done" | "error";
+  phase: "auth" | "waiting" | "uploading" | "downloading" | "done" | "error";
   message: string;
 }
 
@@ -107,6 +107,14 @@ declare global {
         list: () => Promise<Note[]>;
         save: (note: Note) => Promise<void>;
         delete: (id: string) => Promise<void>;
+        // Sube los bytes crudos de una imagen a la caché local; devuelve el
+        // nombre de archivo (`{uuid}.{ext}`) para referenciar como
+        // `note-image://{filename}` en el bodyHtml.
+        saveImage: (dataBase64: string, fileName: string) => Promise<{ filename: string }>;
+        // Se dispara cuando un pull de Drive sobrescribió archivos de notas
+        // sin que el renderer se entere, o cuando terminaron de descargarse
+        // imágenes pendientes.
+        onChanged: (callback: () => void) => () => void;
       };
       birthdays: {
         list: () => Promise<Birthday[]>;
@@ -116,6 +124,8 @@ declare global {
       drive: {
         sync: () => Promise<{ ok: boolean; uploaded?: number; error?: string }>;
         onSyncStatus: (callback: (status: SyncStatus) => void) => () => void;
+        downloadPendingImages: (filenames: string[]) => Promise<{ ok: boolean; error?: string }>;
+        onImagesPending: (callback: (filenames: string[]) => void) => () => void;
       };
     };
   }

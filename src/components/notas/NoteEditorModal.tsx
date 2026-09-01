@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Check, Plus, Trash2, X } from "lucide-react";
+import { Bold, Check, Image as ImageIcon, Italic, List, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { DeleteNoteModal } from "./DeleteNoteModal";
-import { RichTextEditor } from "./RichTextEditor";
+import { NoteColorPicker } from "./NoteColorPicker";
+import { RichTextEditor, type RichTextEditorHandle } from "./RichTextEditor";
 import { DatePickerPopover } from "./DatePickerPopover";
-import { NOTE_COLORS, getNoteColorClassName } from "./colors";
+import { getNoteColorClassName } from "./colors";
 import type { Note, NoteChecklistItem } from "@/types/electron-api";
 
 const AUTOSAVE_DELAY_MS = 3000;
@@ -26,6 +27,9 @@ interface NoteEditorModalProps {
   onClose: () => void;
   onSave: (note: Note) => void;
   onDelete: (id: string) => void;
+  // Abre el mismo lightbox que NoteCard.tsx usa desde la pantalla de notas —
+  // ver el prop del mismo nombre en RichTextEditor.tsx.
+  onViewImage: (filenames: string[], startIndex: number) => void;
 }
 
 export function NoteEditorModal({
@@ -34,6 +38,7 @@ export function NoteEditorModal({
   onClose,
   onSave,
   onDelete,
+  onViewImage,
 }: NoteEditorModalProps) {
   const [title, setTitle] = useState(initialNote.title);
   const [color, setColor] = useState(initialNote.color);
@@ -48,6 +53,7 @@ export function NoteEditorModal({
   // previews exactly what the card will look like once saved.
   const colorClassName = getNoteColorClassName(color);
   const type = initialNote.type;
+  const richTextRef = useRef<RichTextEditorHandle>(null);
 
   const pendingRef = useRef<Note | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -192,7 +198,7 @@ export function NoteEditorModal({
       }}
     >
       <motion.div
-        className={`card w-full max-w-lg shadow-xl ${colorClassName || "bg-base-100"}`}
+        className={`card max-h-[88vh] w-full max-w-2xl overflow-y-auto shadow-xl ${colorClassName || "bg-base-100"}`}
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -202,9 +208,12 @@ export function NoteEditorModal({
         <div className="card-body gap-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold">Editar nota</h3>
-            <button type="button" className="btn btn-soft btn-sm btn-circle" onClick={handleClose}>
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <NoteColorPicker color={color} onChange={handleColorChange} />
+              <button type="button" className="btn btn-soft btn-sm btn-circle" onClick={handleClose}>
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           <input
@@ -219,42 +228,87 @@ export function NoteEditorModal({
             {type === "todo" ? "TODO" : "Nota"}
           </span>
 
-          <div className="flex flex-wrap gap-2">
-            {NOTE_COLORS.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                title={option.label}
-                onClick={() => handleColorChange(option.key)}
-                className={`h-7 w-7 shrink-0 rounded-full border-2 ${option.className || "bg-base-100"} ${
-                  color === option.key ? "border-primary" : "border-base-300"
-                }`}
-              />
-            ))}
-          </div>
-
-          <DatePickerPopover value={deadline} onChange={handleDeadlineChange} />
-
           {type === "normal" ? (
-            <RichTextEditor value={bodyHtml} onChange={handleBodyChange} placeholder="Escribí algo…" />
+            <>
+              {/* Fecha y formato en una sola fila, todo a la misma altura
+                  (btn-sm, 32px) — antes la barra de herramientas usaba
+                  btn-xs (24px) en una fila aparte y quedaba visualmente
+                  desalineada y sin jerarquía respecto al resto. */}
+              <div className="flex flex-wrap items-center gap-3">
+                <DatePickerPopover value={deadline} onChange={handleDeadlineChange} />
+
+                <div className="h-5 w-px bg-base-content/15" />
+
+                <div className="flex h-8 items-center overflow-hidden rounded-full border border-base-content/10 bg-base-content/5">
+                  <button
+                    type="button"
+                    title="Negrita"
+                    className="flex h-8 w-8 cursor-pointer items-center justify-center hover:bg-base-content/10"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => richTextRef.current?.exec("bold")}
+                  >
+                    <Bold size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Itálica"
+                    className="flex h-8 w-8 cursor-pointer items-center justify-center hover:bg-base-content/10"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => richTextRef.current?.exec("italic")}
+                  >
+                    <Italic size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Lista"
+                    className="flex h-8 w-8 cursor-pointer items-center justify-center hover:bg-base-content/10"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => richTextRef.current?.exec("insertUnorderedList")}
+                  >
+                    <List size={14} />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-soft btn-sm ml-auto gap-2"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => richTextRef.current?.triggerInsertImage()}
+                >
+                  <ImageIcon size={14} />
+                  Insertar imagen
+                </button>
+              </div>
+
+              <RichTextEditor
+                ref={richTextRef}
+                value={bodyHtml}
+                onChange={handleBodyChange}
+                placeholder="Escribí algo…"
+                onViewImage={onViewImage}
+              />
+            </>
           ) : (
-            // Same checklist widget in create and edit mode — add/toggle/
-            // remove already update local `checklist` state regardless of
-            // mode; commit() (called internally) is just a no-op until
-            // there's a real note to autosave.
-            <ChecklistEditor
-              checklist={checklist}
-              color={color}
-              hideCompleted={hideCompleted}
-              newItemText={newItemText}
-              onToggleAll={toggleAllChecklistItems}
-              onToggleHideCompleted={() => setHideCompleted((v) => !v)}
-              onRemoveCompleted={removeCompletedChecklistItems}
-              onUpdateItem={updateChecklistItem}
-              onRemoveItem={removeChecklistItem}
-              onNewItemTextChange={setNewItemText}
-              onAddItem={addChecklistItem}
-            />
+            <>
+              <DatePickerPopover value={deadline} onChange={handleDeadlineChange} />
+              {/* Same checklist widget in create and edit mode — add/toggle/
+                  remove already update local `checklist` state regardless of
+                  mode; commit() (called internally) is just a no-op until
+                  there's a real note to autosave. */}
+              <ChecklistEditor
+                checklist={checklist}
+                color={color}
+                hideCompleted={hideCompleted}
+                newItemText={newItemText}
+                onToggleAll={toggleAllChecklistItems}
+                onToggleHideCompleted={() => setHideCompleted((v) => !v)}
+                onRemoveCompleted={removeCompletedChecklistItems}
+                onUpdateItem={updateChecklistItem}
+                onRemoveItem={removeChecklistItem}
+                onNewItemTextChange={setNewItemText}
+                onAddItem={addChecklistItem}
+              />
+            </>
           )}
 
           <button

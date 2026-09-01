@@ -83,59 +83,96 @@ body {
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --note-default-bg: #422006;
+    /* Antes usaban el tono 950 de cada familia (#422006, #4c0519, ...) —
+       casi negro por diseño en Tailwind, así que todas las notas se veían
+       igual de oscuras entre sí y no coincidían con el 500 vívido que
+       NOTE_COLORS.swatch usa para los círculos del selector (colors.ts).
+       El 800 sigue siendo "modo oscuro" pero conserva el matiz reconocible. */
+    --note-default-bg: #854d0e;
     --note-default-fg: #fef08a;
-    --note-rose-bg: #4c0519;
+    --note-rose-bg: #9f1239;
     --note-rose-fg: #fecdd3;
-    --note-orange-bg: #431407;
+    --note-orange-bg: #9a3412;
     --note-orange-fg: #fed7aa;
-    --note-amber-bg: #451a03;
+    --note-amber-bg: #92400e;
     --note-amber-fg: #fde68a;
-    --note-lime-bg: #1a2e05;
+    --note-lime-bg: #3f6212;
     --note-lime-fg: #d9f99d;
-    --note-emerald-bg: #022c22;
+    --note-emerald-bg: #065f46;
     --note-emerald-fg: #a7f3d0;
-    --note-sky-bg: #082f49;
+    --note-sky-bg: #075985;
     --note-sky-fg: #bae6fd;
-    --note-indigo-bg: #1e1b4b;
+    --note-indigo-bg: #3730a3;
     --note-indigo-fg: #c7d2fe;
-    --note-violet-bg: #2e1065;
+    --note-violet-bg: #5b21b6;
     --note-violet-fg: #ddd6fe;
-    --note-pink-bg: #500724;
+    --note-pink-bg: #9d174d;
     --note-pink-fg: #fbcfe8;
 
     --drive-btn-bg: #14233b;
     --drive-btn-bg-hover: #1b2e4d;
     --drive-btn-fg: #8ab4f8;
   }
+
+  /* Dentro de una nota con color, los inputs/textarea/badges/botones-soft de
+     daisyUI son oscuros pero genéricos (todos leen --color-base-100), así
+     que no combinan con el fondo vívido de la card (NoteEditorModal.tsx).
+     Pisando esa variable con el tono 950 de la misma familia (el que --note-
+     *-bg usaba antes de aclararse a 800, ver más arriba) esos componentes
+     quedan automáticamente teñidos con el color de la nota sin tocar su
+     markup — todo lo que ya usa var(--color-base-100) (.input, .textarea,
+     .badge-soft, .btn-soft) hereda el override dentro de esta tarjeta. */
+  :root:not([data-theme="light"]) .note-color-default { --color-base-100: #422006; }
+  :root:not([data-theme="light"]) .note-color-rose { --color-base-100: #4c0519; }
+  :root:not([data-theme="light"]) .note-color-orange { --color-base-100: #431407; }
+  :root:not([data-theme="light"]) .note-color-amber { --color-base-100: #451a03; }
+  :root:not([data-theme="light"]) .note-color-lime { --color-base-100: #1a2e05; }
+  :root:not([data-theme="light"]) .note-color-emerald { --color-base-100: #022c22; }
+  :root:not([data-theme="light"]) .note-color-sky { --color-base-100: #082f49; }
+  :root:not([data-theme="light"]) .note-color-indigo { --color-base-100: #1e1b4b; }
+  :root:not([data-theme="light"]) .note-color-violet { --color-base-100: #2e1065; }
+  :root:not([data-theme="light"]) .note-color-pink { --color-base-100: #500724; }
 }
 
 :root[data-theme="dark"] {
-  --note-default-bg: #422006;
+  --note-default-bg: #854d0e;
   --note-default-fg: #fef08a;
-  --note-rose-bg: #4c0519;
+  --note-rose-bg: #9f1239;
   --note-rose-fg: #fecdd3;
-  --note-orange-bg: #431407;
+  --note-orange-bg: #9a3412;
   --note-orange-fg: #fed7aa;
-  --note-amber-bg: #451a03;
+  --note-amber-bg: #92400e;
   --note-amber-fg: #fde68a;
-  --note-lime-bg: #1a2e05;
+  --note-lime-bg: #3f6212;
   --note-lime-fg: #d9f99d;
-  --note-emerald-bg: #022c22;
+  --note-emerald-bg: #065f46;
   --note-emerald-fg: #a7f3d0;
-  --note-sky-bg: #082f49;
+  --note-sky-bg: #075985;
   --note-sky-fg: #bae6fd;
-  --note-indigo-bg: #1e1b4b;
+  --note-indigo-bg: #3730a3;
   --note-indigo-fg: #c7d2fe;
-  --note-violet-bg: #2e1065;
+  --note-violet-bg: #5b21b6;
   --note-violet-fg: #ddd6fe;
-  --note-pink-bg: #500724;
+  --note-pink-bg: #9d174d;
   --note-pink-fg: #fbcfe8;
 
   --drive-btn-bg: #14233b;
   --drive-btn-bg-hover: #1b2e4d;
   --drive-btn-fg: #8ab4f8;
 }
+
+/* Mismo truco que en el bloque de arriba (@media dark), para cuando el tema
+   se fuerza a oscuro en vez de seguir al sistema. */
+:root[data-theme="dark"] .note-color-default { --color-base-100: #422006; }
+:root[data-theme="dark"] .note-color-rose { --color-base-100: #4c0519; }
+:root[data-theme="dark"] .note-color-orange { --color-base-100: #431407; }
+:root[data-theme="dark"] .note-color-amber { --color-base-100: #451a03; }
+:root[data-theme="dark"] .note-color-lime { --color-base-100: #1a2e05; }
+:root[data-theme="dark"] .note-color-emerald { --color-base-100: #022c22; }
+:root[data-theme="dark"] .note-color-sky { --color-base-100: #082f49; }
+:root[data-theme="dark"] .note-color-indigo { --color-base-100: #1e1b4b; }
+:root[data-theme="dark"] .note-color-violet { --color-base-100: #2e1065; }
+:root[data-theme="dark"] .note-color-pink { --color-base-100: #500724; }
 
 .note-color-default {
   background-color: var(--note-default-bg);
@@ -185,4 +222,52 @@ body {
 }
 .btn-drive-sync:hover {
   background-color: var(--drive-btn-bg-hover);
+}
+
+/* Imágenes insertadas en una nota (RichTextEditor.tsx): van envueltas en un
+   <span contenteditable="false">, el truco estándar para que un contenteditable
+   trate una imagen como un bloque atómico seleccionable/borrable de una — sin
+   esto, un click+Backspace sobre la imagen es poco confiable en Chromium.
+   Los botones de acción solo se muestran dentro de un contenteditable real
+   (no en NoteCard.tsx, que renderiza el mismo bodyHtml de solo lectura). */
+.note-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  margin: 0.2rem 0.4rem 0.4rem 0;
+  vertical-align: bottom;
+}
+.note-image-wrap img {
+  display: block;
+  max-width: 100%;
+  border-radius: 0.5rem;
+}
+.note-image-actions {
+  display: none;
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  gap: 0.35rem;
+}
+[contenteditable="true"] .note-image-wrap:hover .note-image-actions {
+  display: flex;
+}
+.note-image-view,
+.note-image-delete {
+  display: flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.note-image-view:hover,
+.note-image-delete:hover {
+  background: rgba(0, 0, 0, 0.8);
 }
