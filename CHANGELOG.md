@@ -2,6 +2,12 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.22] - 2026-09-02
+
+- Ahora podés ver los diseños de Figma vinculados a un ticket de Jira sin salir de la app: aparece un botón con el logo de Figma que abre el diseño en una ventana propia, en vez de dejarte perdido en una página de Figma sin salida.
+- Los links que abren una ventana nueva (en Jira, Gmail o cualquier otro servicio) ahora se muestran dentro de esa misma ventana en vez de no hacer nada.
+- Mejoras internas de arquitectura, rendimiento y estabilidad.
+
 ## [0.1.21] - 2026-09-02
 
 - El cartel de "no se pudo cargar" con botón de reintentar ahora también aparece cuando un servicio devuelve un error de su propio sitio (por ejemplo, una sesión vencida) — antes eso dejaba la pantalla en blanco sin ningún aviso.
