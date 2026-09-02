@@ -27,6 +27,7 @@
 
 # claude code (local settings/scratch, not shared)
 .claude/
+.scratch/
 
 # debug
 npm-debug.log*

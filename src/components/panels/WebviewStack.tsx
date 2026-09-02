@@ -15,90 +15,27 @@ import { getServiceDefinition, type ServiceDefinition } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import { SplitLayout } from "./SplitLayout";
 import { WebviewToolbar } from "./WebviewToolbar";
+import {
+  GAP,
+  RADIUS,
+  CORNERS,
+  maskGradient,
+  fullscreenCornerPosition,
+  splitCornerPosition,
+  fullscreenToolbarPosition,
+  splitToolbarPosition,
+} from "./webviewGeometry";
+import { useToolbarHistory } from "./useToolbarHistory";
+import { useWebviewRetry, ERROR_CODE_ABORTED } from "./useWebviewRetry";
 
-const GAP = 5;
-const RADIUS = 12;
-// Offset of the floating nav toolbar from the frame edge, and its fixed
-// height (collapsed and expanded are the same height — it only grows
-// sideways — so split-mode positioning can anchor off it without measuring
-// the DOM; see splitToolbarPosition below).
-const TOOLBAR_MARGIN = 10;
-const TOOLBAR_HEIGHT = 40;
 // How long to wait after the last navigation before persisting it — SPAs
 // like Gmail/GitHub fire did-navigate-in-page repeatedly while a page is
 // settling, and only the final URL is worth writing to disk.
 const NAVIGATE_SAVE_DEBOUNCE_MS = 1500;
-// How many settled URLs the floating toolbar's Back/Forward remembers per
-// service. Deliberately app-owned rather than the webview's own
-// goBack()/goForward() — embedded SPAs (Figma inside a Jira ticket, in
-// particular) can leave native history in a state where "back" does
-// nothing useful, which is the exact dead-end this toolbar exists to
-// escape. A short, predictable breadcrumb trail beats a long unpredictable
-// one for that purpose.
-const MAX_TOOLBAR_HISTORY = 5;
-// How long to wait between automatic reload attempts once a webview fails to
-// load (e.g. no internet) — also the number the countdown badge counts down
-// from.
-const RETRY_INTERVAL_SECONDS = 30;
-// Electron's ERR_ABORTED — fires for perfectly normal cases (a navigation
-// superseded by another, a download, a redirect chain) rather than an actual
-// failure, so it must not surface as an error overlay.
-const ERROR_CODE_ABORTED = -3;
-
-type Corner = "tl" | "tr" | "bl" | "br";
-const CORNERS: Corner[] = ["tl", "tr", "bl", "br"];
-
-const MASK_ORIGIN: Record<Corner, string> = {
-  tl: "100% 100%",
-  tr: "0% 100%",
-  bl: "100% 0%",
-  br: "0% 0%",
-};
-
-function maskGradient(corner: Corner): string {
-  return `radial-gradient(circle at ${MASK_ORIGIN[corner]}, transparent 0, transparent ${RADIUS}px, black ${RADIUS}px, black 100%)`;
-}
-
-/** Corner mask position when the webview fills the container minus a fixed GAP
- * on every side — doesn't need the container's own size, just CSS edges. */
-function fullscreenCornerPosition(corner: Corner): CSSProperties {
-  const vertical = corner === "tl" || corner === "tr" ? { top: GAP } : { bottom: GAP };
-  const horizontal = corner === "tl" || corner === "bl" ? { left: GAP } : { right: GAP };
-  return { ...vertical, ...horizontal };
-}
-
-/** Corner mask position from a measured split-panel rect — all in the same
- * top/left coordinate space as WebviewStack's own root (see SplitLayout). */
-function splitCornerPosition(corner: Corner, rect: DOMRect): CSSProperties {
-  const top = corner === "tl" || corner === "tr" ? rect.top + GAP : rect.top + rect.height - GAP - RADIUS;
-  const left = corner === "tl" || corner === "bl" ? rect.left + GAP : rect.left + rect.width - GAP - RADIUS;
-  return { top, left };
-}
-
-/** Toolbar position when the webview fills the container minus GAP — bottom-left
- * corner, offset inward by TOOLBAR_MARGIN. */
-function fullscreenToolbarPosition(): CSSProperties {
-  return { bottom: GAP + TOOLBAR_MARGIN, left: GAP + TOOLBAR_MARGIN };
-}
-
-/** Toolbar position from a measured split-panel rect, same coordinate space
- * as splitCornerPosition above. */
-function splitToolbarPosition(rect: DOMRect): CSSProperties {
-  return {
-    top: rect.top + rect.height - GAP - TOOLBAR_MARGIN - TOOLBAR_HEIGHT,
-    left: rect.left + GAP + TOOLBAR_MARGIN,
-  };
-}
 
 interface IpcMessageEvent extends Event {
   channel: string;
   args: unknown[];
-}
-
-/** A service's own settled-URL breadcrumb trail — see MAX_TOOLBAR_HISTORY. */
-interface ToolbarHistory {
-  entries: string[];
-  index: number;
 }
 
 interface ServiceWebviewProps {
@@ -117,16 +54,28 @@ interface WebviewNavigateEvent extends Event {
   url: string;
 }
 
+// did-frame-navigate: same "a full top-level navigation completed" moment as
+// did-navigate, but also reports the HTTP status — used instead of
+// did-navigate so an HTTP-level failure (401/403/404/500…) can be told apart
+// from a real success. Chromium treats a page that answers with an error
+// status as a completed, successful navigation (did-fail-load never fires
+// for it — that event is only for network-level failures like DNS/timeout),
+// so without this a page like that would otherwise load "successfully" into
+// a blank/broken screen with no error card and no way to retry.
+interface WebviewFrameNavigateEvent extends Event {
+  url: string;
+  isMainFrame: boolean;
+  // -1 for non-HTTP navigations (e.g. a same-partition redirect chain that
+  // never actually hits the network); empty httpStatusText likewise.
+  httpResponseCode: number;
+  httpStatusText: string;
+}
+
 interface WebviewFailLoadEvent extends Event {
   errorCode: number;
   errorDescription: string;
   validatedURL: string;
   isMainFrame: boolean;
-}
-
-interface LoadError {
-  code: number;
-  description: string;
 }
 
 function ServiceWebview({
@@ -147,55 +96,7 @@ function ServiceWebview({
   // own in-progress navigation on every debounced save, see onNavigate below).
   const [initialSrc] = useState(() => initialUrl || service.url);
 
-  const [loadError, setLoadError] = useState<LoadError | null>(null);
-  const [retrySeconds, setRetrySeconds] = useState<number | null>(null);
-  const retryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const clearRetryInterval = useCallback(() => {
-    if (retryIntervalRef.current) {
-      clearInterval(retryIntervalRef.current);
-      retryIntervalRef.current = null;
-    }
-  }, []);
-
-  const handleRetry = useCallback(() => {
-    clearRetryInterval();
-    setRetrySeconds(null);
-    (ref.current as WebviewElement | null)?.reload();
-  }, [clearRetryInterval]);
-
-  // Reset the countdown display whenever loadError changes identity — a new
-  // error, or a fresh one re-raised by a failed retry (setLoadError always
-  // produces a new object). Adjusting state during render, per
-  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes,
-  // rather than in an effect body, since this is purely derived from
-  // loadError and shouldn't cause an extra commit.
-  const [prevLoadError, setPrevLoadError] = useState(loadError);
-  if (loadError !== prevLoadError) {
-    setPrevLoadError(loadError);
-    setRetrySeconds(loadError ? RETRY_INTERVAL_SECONDS : null);
-  }
-
-  // Runs the actual countdown ticker while a load error is present, and
-  // fires a reload when it hits zero. Torn down entirely once did-finish-load
-  // clears loadError.
-  useEffect(() => {
-    if (!loadError) {
-      clearRetryInterval();
-      return;
-    }
-    retryIntervalRef.current = setInterval(() => {
-      setRetrySeconds((prev) => {
-        if (prev === null) return prev;
-        if (prev <= 1) {
-          (ref.current as WebviewElement | null)?.reload();
-          return RETRY_INTERVAL_SECONDS;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return clearRetryInterval;
-  }, [loadError, clearRetryInterval]);
+  const { loadError, setLoadError, retrySeconds, handleRetry } = useWebviewRetry(ref);
 
   // Separate from the listener effect below so a mute toggle (which changes
   // notificationsEnabled, a dep of that effect) doesn't bounce the ref the
@@ -233,7 +134,22 @@ function ServiceWebview({
       setLoadError(null);
     };
     const handleStopLoading = () => onLoadingChange(service.id, false);
-    const handleNavigate = (e: Event) => onNavigate(service.id, (e as WebviewNavigateEvent).url);
+    const handleInPageNavigate = (e: Event) => onNavigate(service.id, (e as WebviewNavigateEvent).url);
+    const handleFrameNavigate = (e: Event) => {
+      const event = e as WebviewFrameNavigateEvent;
+      // Sub-frame commits (an embedded gadget/iframe loading its own URL)
+      // aren't the page itself — only the top document's own navigation
+      // should ever surface as an error card or get remembered as lastUrl.
+      if (!event.isMainFrame) return;
+      if (event.httpResponseCode >= 400) {
+        setLoadError({
+          code: event.httpResponseCode,
+          description: event.httpStatusText || `HTTP ${event.httpResponseCode}`,
+        });
+        return;
+      }
+      onNavigate(service.id, event.url);
+    };
     const handleFailLoad = (e: Event) => {
       const event = e as WebviewFailLoadEvent;
       // Only the main-frame navigation matters — a failed sub-resource
@@ -246,23 +162,24 @@ function ServiceWebview({
     el.addEventListener("ipc-message", handleIpcMessage);
     el.addEventListener("did-start-loading", handleStartLoading);
     el.addEventListener("did-stop-loading", handleStopLoading);
-    // did-navigate: full page loads. did-navigate-in-page: pushState/hash
+    // did-frame-navigate: full page loads (see the type comment above for
+    // why this replaces did-navigate). did-navigate-in-page: pushState/hash
     // navigation, which is how Gmail/GitHub/Trello move between screens
     // without a real page load — without this, "remember where I was"
     // would only ever see each service's very first landing URL.
-    el.addEventListener("did-navigate", handleNavigate);
-    el.addEventListener("did-navigate-in-page", handleNavigate);
+    el.addEventListener("did-frame-navigate", handleFrameNavigate);
+    el.addEventListener("did-navigate-in-page", handleInPageNavigate);
     el.addEventListener("did-fail-load", handleFailLoad);
     return () => {
       el.removeEventListener("ipc-message", handleIpcMessage);
       el.removeEventListener("did-start-loading", handleStartLoading);
       el.removeEventListener("did-stop-loading", handleStopLoading);
-      el.removeEventListener("did-navigate", handleNavigate);
-      el.removeEventListener("did-navigate-in-page", handleNavigate);
+      el.removeEventListener("did-frame-navigate", handleFrameNavigate);
+      el.removeEventListener("did-navigate-in-page", handleInPageNavigate);
       el.removeEventListener("did-fail-load", handleFailLoad);
       onLoadingChange(service.id, false);
     };
-  }, [service.id, notificationsEnabled, onLoadingChange, onNavigate]);
+  }, [service.id, notificationsEnabled, onLoadingChange, onNavigate, setLoadError]);
 
   return (
     <>
@@ -271,6 +188,15 @@ function ServiceWebview({
         src={initialSrc}
         partition={service.partition}
         preload={preloadPath}
+        // Sin esto, webview-preload.ts corre en un "isolated world" propio
+        // — window.Notification ahí es un objeto distinto del que ve la
+        // página real, así que pisarlo no tiene ningún efecto visible y
+        // ninguna notificación llega nunca a bridgearse. Estos son sitios
+        // en los que el usuario ya confía (Gmail/GitHub/etc, sin
+        // nodeIntegration), así que compartir el mundo con el preload acá
+        // es un compromiso razonable — es la única forma de que
+        // window.Notification = BridgedNotification alcance a la página real.
+        webpreferences="contextIsolation=no"
         className="absolute transition-opacity duration-150 ease-out"
         style={{
           ...style,
@@ -318,7 +244,8 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
   // themselves never need to trigger a re-render on their own.
   const webviewRefs = useRef<Record<string, WebviewElement | null>>({});
   const [expandedToolbars, setExpandedToolbars] = useState<Record<string, boolean>>({});
-  const [toolbarHistory, setToolbarHistory] = useState<Record<string, ToolbarHistory>>({});
+  const { toolbarHistory, pushToolbarHistory, handleBack, handleForward } =
+    useToolbarHistory(webviewRefs);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -332,46 +259,12 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
     webviewRefs.current[id] = el;
   }, []);
 
-  // Records a settled navigation into the toolbar's own short breadcrumb
-  // trail (see MAX_TOOLBAR_HISTORY). A no-op when `url` is exactly where
-  // Back/Forward just parked the pointer, so stepping through the trail
-  // doesn't re-push the entry it lands on as if it were a fresh visit.
-  const pushToolbarHistory = useCallback((id: string, url: string) => {
-    setToolbarHistory((prev) => {
-      const h = prev[id];
-      if (h && h.entries[h.index] === url) return prev;
-      const kept = h ? h.entries.slice(0, h.index + 1) : [];
-      const entries = [...kept, url].slice(-MAX_TOOLBAR_HISTORY);
-      return { ...prev, [id]: { entries, index: entries.length - 1 } };
-    });
-  }, []);
-
   const toggleToolbar = useCallback((id: string) => {
     setExpandedToolbars((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
   const handleHome = useCallback((id: string, url: string) => {
     webviewRefs.current[id]?.loadURL(url);
-  }, []);
-
-  const handleBack = useCallback((id: string) => {
-    setToolbarHistory((prev) => {
-      const h = prev[id];
-      if (!h || h.index <= 0) return prev;
-      const index = h.index - 1;
-      webviewRefs.current[id]?.loadURL(h.entries[index]);
-      return { ...prev, [id]: { ...h, index } };
-    });
-  }, []);
-
-  const handleForward = useCallback((id: string) => {
-    setToolbarHistory((prev) => {
-      const h = prev[id];
-      if (!h || h.index >= h.entries.length - 1) return prev;
-      const index = h.index + 1;
-      webviewRefs.current[id]?.loadURL(h.entries[index]);
-      return { ...prev, [id]: { ...h, index } };
-    });
   }, []);
 
   const handleCopyUrl = useCallback((id: string) => {
@@ -476,7 +369,15 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
         />
       )}
 
-      {enabledServices.map((service) => {
+      {/* Gated on preloadPath being resolved: mounting a <webview> with
+          src set before its preload attribute is known means Electron
+          starts that first navigation with no preload script at all, and
+          setting preload afterward only takes effect on the *next*
+          navigation — for an SPA like Gmail/GitHub that mostly never
+          fires another top-level one, the guest page's window.Notification
+          override (webview-preload.ts) never installs, so no notification
+          ever bridges through for the entire session. */}
+      {preloadPath && enabledServices.map((service) => {
         const isFullscreenActive = !isSplit && activeGroup?.serviceIds[0] === service.id;
         const splitRect = isSplit && panelIds.includes(service.id) ? rects[service.id] : undefined;
         const isVisible = isFullscreenActive || Boolean(splitRect);

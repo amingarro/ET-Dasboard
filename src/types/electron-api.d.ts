@@ -81,6 +81,14 @@ export interface SyncStatus {
   message: string;
 }
 
+// Parsed from CHANGELOG.md (see electron/releaseNotes.ts) — not persisted
+// anywhere, just read fresh from the installed app's own copy of the file.
+export interface ReleaseNoteEntry {
+  version: string;
+  date: string;
+  notes: string[];
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -120,6 +128,9 @@ declare global {
         list: () => Promise<Birthday[]>;
         save: (birthday: Birthday) => Promise<Birthday[]>;
         delete: (id: string) => Promise<Birthday[]>;
+      };
+      releaseNotes: {
+        list: () => Promise<ReleaseNoteEntry[]>;
       };
       drive: {
         sync: () => Promise<{ ok: boolean; uploaded?: number; error?: string }>;

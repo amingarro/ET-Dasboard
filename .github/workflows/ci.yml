@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - name: Type-check renderer
+        run: npx tsc --noEmit
+
+      - name: Type-check main process
+        run: npx tsc -p tsconfig.electron.json --noEmit
+
+      - run: npm run build
+
+      - run: npm test

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
+import { useCrudResource } from "@/lib/useCrudResource";
 import type { Note } from "@/types/electron-api";
 
 // How long to wait after the last edit before pushing to Drive — long enough
@@ -9,12 +10,18 @@ import type { Note } from "@/types/electron-api";
 // per change, short enough that "auto" still feels close to instant.
 const AUTO_SYNC_DEBOUNCE_MS = 2000;
 
+// Module-level, not inline at the call site — same reasoning as
+// getBirthdaysApi() in birthdays.ts: stable identity, and only touches
+// `window.electronAPI` when invoked, not at render/prerender time.
+function getNotesApi() {
+  return window.electronAPI.notes;
+}
+
 // Plain hook, not a Context/Provider like store.tsx's StoreProvider — no
 // screen other than Notas.tsx needs this data, so it's loaded lazily when
 // that screen mounts instead of app-wide at startup.
 export function useNotes() {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items: notes, loading, save, remove, refresh } = useCrudResource<Note>(getNotesApi);
   // Se incrementa cada vez que el proceso principal avisa que las notas
   // cambiaron sin que nos enteremos (un pull de Drive, o una imagen
   // pendiente que terminó de descargarse) — Notas.tsx lo usa como `key` de
@@ -26,19 +33,11 @@ export function useNotes() {
   const driveSyncEnabled = state.driveSyncEnabled;
   const autoSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const refresh = useCallback(() => {
-    window.electronAPI.notes.list().then((value) => {
-      setNotes(value);
-      setLoading(false);
-      setRefreshToken((v) => v + 1);
-    });
-  }, []);
-
   useEffect(() => {
-    refresh();
+    return window.electronAPI.notes.onChanged(() => {
+      refresh().then(() => setRefreshToken((v) => v + 1));
+    });
   }, [refresh]);
-
-  useEffect(() => window.electronAPI.notes.onChanged(refresh), [refresh]);
 
   // Debounced, not fired on every single save — while Drive sync is on this
   // is the only thing driving it, no need to also click the button.
@@ -62,21 +61,11 @@ export function useNotes() {
   // away, e.g. a NoteCard prop callback built in Notas.tsx's render).
   const saveNote = useCallback(
     (note: Note) => {
-      const stamped = { ...note, updatedAt: Date.now() };
-      setNotes((prev) => {
-        const exists = prev.some((n) => n.id === stamped.id);
-        return exists ? prev.map((n) => (n.id === stamped.id ? stamped : n)) : [...prev, stamped];
-      });
-      window.electronAPI.notes.save(stamped);
+      save({ ...note, updatedAt: Date.now() });
       scheduleAutoSync();
     },
-    [scheduleAutoSync],
+    [save, scheduleAutoSync],
   );
 
-  const deleteNote = useCallback((id: string) => {
-    setNotes((prev) => prev.filter((n) => n.id !== id));
-    window.electronAPI.notes.delete(id);
-  }, []);
-
-  return { notes, loading, refreshToken, saveNote, deleteNote };
+  return { notes, loading, refreshToken, saveNote, deleteNote: remove };
 }

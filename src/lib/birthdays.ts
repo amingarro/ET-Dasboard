@@ -1,34 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCrudResource } from "@/lib/useCrudResource";
 import type { Birthday } from "@/types/electron-api";
+
+// Module-level, not inline at the call site: a stable function identity
+// across renders (see useCrudResource's own comment on why), and one that
+// only touches `window.electronAPI` when actually invoked rather than as
+// soon as useBirthdays() renders — Next's static export prerenders this
+// "use client" hook on the server too, where `window` doesn't exist yet.
+function getBirthdaysApi() {
+  return window.electronAPI.birthdays;
+}
 
 // Plain hook, not a Context/Provider — same reasoning as useNotes() in
 // notes.ts. The dock button needs this data too (to show today's badge), so
 // unlike notes it's not lazy-loaded only when a screen mounts.
 export function useBirthdays() {
-  const [birthdays, setBirthdays] = useState<Birthday[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items, loading, save, remove } = useCrudResource<Birthday>(getBirthdaysApi);
 
-  useEffect(() => {
-    window.electronAPI.birthdays.list().then((value) => {
-      setBirthdays(value);
-      setLoading(false);
-    });
-  }, []);
-
-  const saveBirthday = useCallback((birthday: Birthday) => {
-    setBirthdays((prev) => {
-      const exists = prev.some((b) => b.id === birthday.id);
-      return exists ? prev.map((b) => (b.id === birthday.id ? birthday : b)) : [...prev, birthday];
-    });
-    window.electronAPI.birthdays.save(birthday);
-  }, []);
-
-  const deleteBirthday = useCallback((id: string) => {
-    setBirthdays((prev) => prev.filter((b) => b.id !== id));
-    window.electronAPI.birthdays.delete(id);
-  }, []);
-
-  return { birthdays, loading, saveBirthday, deleteBirthday };
+  return { birthdays: items, loading, saveBirthday: save, deleteBirthday: remove };
 }

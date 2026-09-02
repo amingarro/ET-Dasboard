@@ -14,7 +14,8 @@
     "build": "next build && npm run build:electron",
     "start": "next start",
     "lint": "eslint",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "test": "vitest run"
   },
   "build": {
     "appId": "com.mausedar.et-dashboard",
@@ -25,9 +26,12 @@
     "afterPack": "scripts/afterPack.cjs",
     "files": [
       "dist-electron/**/*",
+      "!dist-electron/**/*.test.js",
+      "!dist-electron/**/*.test.js.map",
       "out/**/*",
       "build/**/*",
-      "package.json"
+      "package.json",
+      "CHANGELOG.md"
     ],
     "publish": {
       "provider": "github",
@@ -107,6 +111,7 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
     "typescript": "^5",
+    "vitest": "^4.1.11",
     "wait-on": "^9.1.0"
   }
 }

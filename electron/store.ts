@@ -68,7 +68,7 @@ let storeInstance: AppStore | null = null;
 
 // Shape used by every layout schema this app has ever persisted, so the
 // migration below can detect and convert old data regardless of version.
-interface LegacyLayoutState {
+export interface LegacyLayoutState {
   mode?: "fullscreen" | "split";
   activeServiceId?: string | null;
   splitServiceIds?: string[];
@@ -78,7 +78,7 @@ interface LegacyLayoutState {
   activeGroupId?: string | null;
 }
 
-function migrateLayout(services: ServiceConfig[], layout: LegacyLayoutState | undefined): LayoutState {
+export function migrateLayout(services: ServiceConfig[], layout: LegacyLayoutState | undefined): LayoutState {
   if (layout?.groups) {
     // Already on the groups-based schema; just backfill anything a future
     // field addition might be missing (electron-store doesn't deep-merge).

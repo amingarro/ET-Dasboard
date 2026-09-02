@@ -3,7 +3,7 @@
 import { useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { motion } from "motion/react";
-import { getServiceDefinition } from "@/lib/services";
+import { getServiceDefinition, soloGroup } from "@/lib/services";
 import { ServiceIcon } from "@/components/ServiceIcon";
 import { NotasLogo } from "@/components/notas/NotasLogo";
 import { useStore } from "@/lib/store";
@@ -82,12 +82,7 @@ export function Dock({
     const group = groups.find((g) => g.id === groupId);
     if (!group || group.serviceIds.length < 2) return;
 
-    const soloGroups: ViewGroup[] = group.serviceIds.map((id) => ({
-      id,
-      serviceIds: [id],
-      splitDirection: "horizontal",
-      splitSizes: {},
-    }));
+    const soloGroups: ViewGroup[] = group.serviceIds.map((id) => soloGroup(id));
     const nextGroups = groups.flatMap((g) => (g.id === groupId ? soloGroups : [g]));
 
     update({ layout: { ...state.layout, groups: nextGroups, activeGroupId: soloGroups[0].id } });

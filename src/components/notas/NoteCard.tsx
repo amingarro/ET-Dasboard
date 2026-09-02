@@ -2,7 +2,7 @@
 
 import { useMemo, type CSSProperties } from "react";
 import { Clock, Pin } from "lucide-react";
-import { getNoteColorClassName } from "./colors";
+import { getNoteColorClassName, noteCheckboxStyle } from "./colors";
 import { getDeadlineBreakdown, getDeadlineStatus, splitNoteBody } from "./noteUtils";
 import { NoteImageCarousel } from "./NoteImageCarousel";
 import type { Note } from "@/types/electron-api";
@@ -132,17 +132,7 @@ export function NoteCard({ note, onOpen, onTogglePin, onToggleChecklistItem, onO
                     className="checkbox checkbox-sm"
                     checked={item.done}
                     readOnly
-                    // The box's fill (--input-color) and the checkmark's own
-                    // color (currentColor, per daisyUI's checkbox.css) are
-                    // independently settable — using this note's own fg for
-                    // the fill and its bg for the mark reuses the same pair
-                    // colors.ts already picked for contrast, just inverted.
-                    style={
-                      {
-                        "--input-color": `var(--note-${note.color}-fg)`,
-                        color: `var(--note-${note.color}-bg)`,
-                      } as CSSProperties
-                    }
+                    style={noteCheckboxStyle(note.color)}
                   />
                   <span className={item.done ? "opacity-50 line-through" : ""}>{item.text}</span>
                 </li>

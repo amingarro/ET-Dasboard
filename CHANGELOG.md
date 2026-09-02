@@ -2,6 +2,12 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.21] - 2026-09-02
+
+- El cartel de "no se pudo cargar" con botón de reintentar ahora también aparece cuando un servicio devuelve un error de su propio sitio (por ejemplo, una sesión vencida) — antes eso dejaba la pantalla en blanco sin ningún aviso.
+- Nueva pantalla de "Novedades" en Configuración: un link junto a la versión instalada abre una ventana con el detalle de esta versión y de las últimas 10 anteriores, con fecha incluida.
+- Mejoras internas de arquitectura, rendimiento y estabilidad.
+
 ## [0.1.20] - 2026-09-01
 
 - Ahora se pueden agregar fotos a las notas y verlas en grande con un visor a pantalla completa, navegando entre todas las de esa nota con flechas (también las del teclado); cuando una nota tiene varias, en el listado se muestran en un carrusel compacto en vez de apiladas una debajo de la otra.

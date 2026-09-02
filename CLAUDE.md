@@ -30,6 +30,9 @@ electron/
                        page's Notification API to the host (see "Notifications" below)
   store.ts             electron-store schema + defaults + schema migrations
   services.ts          main-process service defs (id, partition, domains to strip headers for)
+  releaseNotes.ts      parses CHANGELOG.md into {version,date,notes}[] for the release-notes
+                       modal (see "Release notes modal" below) — reads the file fresh via
+                       IPC on every open, nothing is duplicated/persisted here
 src/
   app/
     page.tsx            just renders <Shell />
@@ -40,6 +43,13 @@ src/
                         theme sync, switches active group on notification click
     ServiceIcon.tsx     shared per-service icon badge (Font Awesome glyph + brand-color
                         background, used by Dock/Onboarding/Settings/notification popup)
+    ServiceListItem.tsx shared drag-handle+icon+name row — Settings' service list and
+                        Onboarding's picker both render this (a `variant` prop: "toggle"
+                        for Settings' checkbox+bell row, "select" for Onboarding's
+                        click-to-toggle row)
+    SegmentedControl.tsx generic `join`-of-buttons picker (`options`/`value`/`onChange`) —
+                        the theme picker (Settings + Onboarding) and dock-mode picker
+                        (Settings) are both just this with different option lists
     dock/Dock.tsx       the sidebar — renders one button per *group* (see below), handles
                         drag-to-merge, ungroup, dock display mode
     panels/
@@ -47,15 +57,39 @@ src/
                         simultaneously — see "Why all webviews stay mounted" below),
                         positions them absolutely based on the active group, bridges
                         webview notification events to the main process
+      webviewGeometry.ts  pure positioning math split out of WebviewStack (corner-mask
+                        placement, toolbar placement) — no React/DOM, just functions of
+                        GAP/RADIUS and measured rects
+      useToolbarHistory.ts  the floating toolbar's own back/forward breadcrumb trail
+                        (MAX_TOOLBAR_HISTORY), split out of WebviewStack
+      useWebviewRetry.ts  per-webview load-error/retry-countdown state, split out of
+                        WebviewStack — see "Webview load failures" below for what feeds it
       SplitLayout.tsx   invisible layout scaffolding (react-resizable-panels) used only
                         to *measure* panel rects for WebviewStack to position webviews
                         against — has no visible content of its own
+      WebviewToolbar.tsx  the floating Home/Back/Forward/Copy overlay itself
+                        (presentational only — state lives in WebviewStack +
+                        useToolbarHistory above)
     onboarding/Onboarding.tsx   first-run: pick services, order (drag), theme
-    settings/Settings.tsx       toggle services + per-service notification mute, drag-reorder,
-                        dock display mode picker, theme picker, ungroup panel, test-notification button
+    settings/
+      Settings.tsx      shell only: sidebar of categories + the version/update-check
+                        footer (with the "Novedades" link, see "Release notes modal"
+                        below) — delegates each category's content to its own panel
+      ServiciosPanel.tsx / CumpleanosPanel.tsx / SyncPanel.tsx / AparienciaPanel.tsx
+                        one component per Settings category; each calls useStore()/
+                        useBirthdays() itself instead of receiving state as props from
+                        Settings.tsx
+      ReleaseNotesModal.tsx  opened from Settings' version footer (see "Release notes
+                        modal" below)
   lib/
     store.tsx           StoreProvider/useStore() React context wrapping the IPC store
-    services.ts          renderer-side service defs (icon/color/url/partition)
+    services.ts          renderer-side service defs (icon/color/url/partition), plus
+                        `soloGroup()` — the one-service `ViewGroup` shape Dock/Settings/
+                        Onboarding all need whenever a group gets split back apart
+    useCrudResource.ts    generic list/optimistic-save/delete factory; `useNotes`/
+                        `useBirthdays` are thin wrappers over it, layering their own
+                        extras on top (Drive auto-sync + refreshToken + an onChanged
+                        listener for notes; birthdays' IPC has none of that)
     useDragReorder.ts     generic native-HTML5-drag reorder hook (Settings + Onboarding)
     useThemeSync.ts        data-theme sync hook, shared by Shell.tsx and the notification
                         popup page (separate renderer processes, each needs its own sync)
@@ -191,8 +225,27 @@ Since webviews are all mounted simultaneously regardless of which one is active 
 
 **Not yet verified**: whether `focusable: false` on the popup window also blocks mouse clicks on some window manager (it's only documented to affect keyboard focus) — if clicking the popup ever turns out to do nothing, that flag is the first thing to try removing.
 
+## Webview load failures: `did-fail-load` doesn't catch everything
+
+`ServiceWebview`'s red "No se pudo cargar {servicio}" retry card (state now in `useWebviewRetry.ts`) used to only trigger on `did-fail-load` — but that event is network-level only (DNS, connection refused, timeout). A page that answers with an HTTP error status (401, 403, 404, 500…) is, as far as Chromium is concerned, a **successful** navigation: no `did-fail-load`, no error card, just whatever broken/blank body the server sent back rendered as if it were the real page.
+
+Found the hard way: Gmail's own SPA occasionally does a top-level navigation to a `studio.workspace.google.com/.../sidepanel/workflows?...&rpctoken=...` URL (its Gemini/Workspace-Studio side panel) that only works loaded embedded, with the right `parent`/`origin`/one-time-token context — loaded cold as a standalone page it 401s. `handleNavigate` (the `did-navigate`/`did-navigate-in-page` listener that feeds `ServiceConfig.lastUrl`) had no way to tell that apart from a real page, so it got persisted as `lastUrl` — every future launch then loaded straight into that dead URL, forever, with nothing on screen and no clue why. `~/.config/et-dashboard/config.json` is the one shared userData dir (see the testing note above), so this reproduced identically in dev and in the packaged install.
+
+Fixed by replacing the `did-navigate` listener with `did-frame-navigate` — same "a full top-level navigation completed" moment, but the event also carries `isMainFrame`/`httpResponseCode`/`httpStatusText`. A main-frame commit with `httpResponseCode >= 400` now shows the retry card instead of being saved as `lastUrl`. `did-navigate-in-page` (SPA route changes) didn't need the same fix — same-document navigation is same-origin by spec, so it can't land on a cross-origin URL like the one above in the first place.
+
+If some service's `lastUrl` is ever suspiciously stuck loading nothing, check `~/.config/et-dashboard/config.json` directly before assuming it's a code bug — clearing that one field and relaunching is a valid, non-destructive fix on its own, no rebuild required.
+
+## Release notes modal
+
+Settings' version footer has a "Novedades" link opening a modal that lists the current version plus the last 10 (`MAX_VERSIONS` in `electron/releaseNotes.ts`). It reads `CHANGELOG.md` fresh off disk on every open (`ipcMain.handle("release-notes:list", ...)` → `window.electronAPI.releaseNotes.list()`) and parses `## [x.y.z] - date` headings + `- ` bullet lines into `{version, date, notes}[]`. **`CHANGELOG.md` is the only source** — nothing is duplicated into a renderer-side data file, so writing it during a release (already the existing process, unchanged) is the only step needed for the modal to pick it up on the next build.
+
+Two things this depends on:
+- `CHANGELOG.md` must ship in the packaged app — it's in `package.json`'s `build.files`, same as `package.json` itself. Don't drop it if that list ever gets rewritten wholesale.
+- **Every changelog entry is written for the person using the app, not for whoever's reading the diff.** A concrete feature or fix gets a concrete, user-facing description — no file names, refactors, or architecture jargon. Purely internal work (a refactor, a new test suite, a CI pipeline) still gets a line so the changelog isn't silently incomplete, but only a short, generic one ("mejoras internas de arquitectura y rendimiento") — never a breakdown of what actually moved where.
+
 ## Commands
 
 - `npm run dev` — builds electron once, then runs `next dev` + `electron .` concurrently
 - `npm run build` — `next build` (static export to `out/`) + electron compile
 - `npm run dist` — full build + `electron-builder` (Linux AppImage/deb; not yet run end-to-end in this environment — needs network access to fetch packaging helper binaries)
+- `npm test` — Vitest, unit tests only so far (pure functions: `migrateLayout`, `birthdayUtils`, `noteUtils` — no React/DOM tests exist yet). `.github/workflows/ci.yml` runs lint + both `tsc --noEmit`s (renderer + electron) + `npm run build` + `npm test` on push/PR; `release.yml` is the separate, pre-existing publish pipeline and doesn't run any of these checks itself.

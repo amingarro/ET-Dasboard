@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 export interface NoteColorOption {
   key: string;
   label: string;
@@ -27,4 +29,16 @@ export const NOTE_COLORS: NoteColorOption[] = [
 
 export function getNoteColorClassName(key: string): string {
   return NOTE_COLORS.find((c) => c.key === key)?.className ?? "";
+}
+
+// The box's fill (--input-color) and the checkmark's own color (currentColor,
+// per daisyUI's checkbox.css) are independently settable — using this note's
+// own fg for the fill and its bg for the mark reuses the same pair colors.ts
+// already picked for contrast, just inverted. Shared by NoteCard.tsx (list
+// view) and NoteEditorModal.tsx's ChecklistEditor (edit view) checkboxes.
+export function noteCheckboxStyle(color: string): CSSProperties {
+  return {
+    "--input-color": `var(--note-${color}-fg)`,
+    color: `var(--note-${color}-bg)`,
+  } as CSSProperties;
 }

@@ -25,6 +25,7 @@ import { deleteBirthday, listBirthdays, saveBirthday, type Birthday } from "./bi
 import { downloadPendingImages, syncNotes, type SyncStatus } from "./driveSync";
 import { getImagePath, saveImageBytes } from "./imagesStore";
 import { markNoteDeleted } from "./syncState";
+import { getReleaseNotes } from "./releaseNotes";
 
 // Privilegiado para que se comporte como un origen seguro normal (fetchable,
 // sin sorpresas de CORS) dentro del renderer, que a su vez carga sobre
@@ -622,6 +623,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("birthdays:list", () => listBirthdays());
   ipcMain.handle("birthdays:save", (_event, birthday: Birthday) => saveBirthday(birthday));
   ipcMain.handle("birthdays:delete", (_event, id: string) => deleteBirthday(id));
+
+  ipcMain.handle("release-notes:list", () => getReleaseNotes());
 
   // Los errores de Node/fetch (fallas de red, una respuesta malformada, etc.)
   // vienen en inglés — nunca hay que mandarlos tal cual a la UI. El detalle

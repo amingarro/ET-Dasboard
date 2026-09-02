@@ -49,7 +49,25 @@ body {
    would come out illegible. The 3-state pattern below (light default,
    OS-dark fallback, explicit data-theme override) mirrors the theme
    attribute's own tri-state logic instead. Each pair is a real Tailwind
-   palette 100/900 (light) or 950/200 (dark) combo, chosen for contrast. */
+   palette 100/900 (light) or 950/200 (dark) combo, chosen for contrast.
+
+   NOTE ON DUPLICATION: the dark-mode values below (both the --note-*-bg/fg
+   pairs and the .note-color-* --color-base-100 overrides further down) are
+   written out TWICE — once inside `@media (prefers-color-scheme: dark) {
+   :root:not([data-theme="light"]) { ... } }` and again inside a plain
+   `:root[data-theme="dark"] { ... }` outside any media query. This is
+   intentional, not an oversight: the two selectors cover independent cases
+   (OS in dark mode with no in-app override, vs. an explicit in-app dark
+   override regardless of OS setting) that must always resolve to the same
+   values, but a selector inside a @media block cannot be comma-combined
+   with one outside it — and moving the combined selector inside the @media
+   would silently drop the "OS light + app forced dark" case. Plain CSS
+   (no Sass/Less here, see AGENTS.md) has no way to express "same values,
+   two independent trigger conditions" without repeating either the whole
+   @media wrapper or the values themselves; repeating just the wrapper isn't
+   possible since @media can't wrap an attribute selector that must also
+   match unconditionally. So the values are duplicated on purpose — if you
+   change one of these blocks, change its twin the same way. */
 :root {
   /* The "sin color" default — a classic pale sticky-note yellow, not the
      app's neutral bg-base-100, per explicit request. */
@@ -121,7 +139,10 @@ body {
      *-bg usaba antes de aclararse a 800, ver más arriba) esos componentes
      quedan automáticamente teñidos con el color de la nota sin tocar su
      markup — todo lo que ya usa var(--color-base-100) (.input, .textarea,
-     .badge-soft, .btn-soft) hereda el override dentro de esta tarjeta. */
+     .badge-soft, .btn-soft) hereda el override dentro de esta tarjeta.
+     Este bloque también está duplicado a propósito más abajo, fuera del
+     @media, para el caso de tema forzado a oscuro — ver "NOTE ON
+     DUPLICATION" arriba en este archivo. */
   :root:not([data-theme="light"]) .note-color-default { --color-base-100: #422006; }
   :root:not([data-theme="light"]) .note-color-rose { --color-base-100: #4c0519; }
   :root:not([data-theme="light"]) .note-color-orange { --color-base-100: #431407; }
@@ -134,6 +155,11 @@ body {
   :root:not([data-theme="light"]) .note-color-pink { --color-base-100: #500724; }
 }
 
+/* Duplicado intencional del bloque @media (prefers-color-scheme: dark) de
+   arriba — mismos valores, para el caso "tema forzado a oscuro en la app
+   con el SO en claro". Ver la nota "NOTE ON DUPLICATION" más arriba: no se
+   puede fusionar con el bloque de @media sin romper uno de los dos casos.
+   Si tocás un valor acá, tocá el mismo valor arriba también. */
 :root[data-theme="dark"] {
   --note-default-bg: #854d0e;
   --note-default-fg: #fef08a;
@@ -162,7 +188,10 @@ body {
 }
 
 /* Mismo truco que en el bloque de arriba (@media dark), para cuando el tema
-   se fuerza a oscuro en vez de seguir al sistema. */
+   se fuerza a oscuro en vez de seguir al sistema. Duplicado a propósito por
+   la misma razón que los --note-*-bg/fg de arriba (ver "NOTE ON
+   DUPLICATION"): mantené este bloque y el de dentro del @media
+   sincronizados si cambiás algún valor. */
 :root[data-theme="dark"] .note-color-default { --color-base-100: #422006; }
 :root[data-theme="dark"] .note-color-rose { --color-base-100: #4c0519; }
 :root[data-theme="dark"] .note-color-orange { --color-base-100: #431407; }

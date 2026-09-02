@@ -8,6 +8,7 @@ import {
   faSlack,
   faTrello,
 } from "@fortawesome/free-brands-svg-icons";
+import type { ViewGroup } from "@/types/electron-api";
 
 export interface ServiceDefinition {
   id: string;
@@ -89,4 +90,12 @@ export const SERVICE_DEFINITIONS: ServiceDefinition[] = [
 
 export function getServiceDefinition(id: string): ServiceDefinition | undefined {
   return SERVICE_DEFINITIONS.find((service) => service.id === id);
+}
+
+// Renderer-side mirror of the same-named helper in electron/store.ts (main
+// process) — kept duplicated rather than shared, same reasoning as
+// StoreSchema in types/electron-api.d.ts: main/renderer are separate TS
+// build targets.
+export function soloGroup(serviceId: string): ViewGroup {
+  return { id: serviceId, serviceIds: [serviceId], splitDirection: "horizontal", splitSizes: {} };
 }

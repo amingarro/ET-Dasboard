@@ -18,6 +18,7 @@ declare namespace JSX {
       partition?: string;
       allowpopups?: string;
       preload?: string;
+      webpreferences?: string;
     };
   }
 }

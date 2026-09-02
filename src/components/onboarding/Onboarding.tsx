@@ -1,12 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Check, GripVertical } from "lucide-react";
-import { SERVICE_DEFINITIONS, getServiceDefinition } from "@/lib/services";
-import { ServiceIcon } from "@/components/ServiceIcon";
+import { Check } from "lucide-react";
+import { SERVICE_DEFINITIONS, getServiceDefinition, soloGroup } from "@/lib/services";
+import { ServiceListItem } from "@/components/ServiceListItem";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { useDragReorder } from "@/lib/useDragReorder";
 import { useStore } from "@/lib/store";
 import type { StoreSchema } from "@/types/electron-api";
+
+const themeOptions: { value: StoreSchema["theme"]; label: string }[] = [
+  { value: "light", label: "Claro" },
+  { value: "dark", label: "Oscuro" },
+  { value: "system", label: "Sistema" },
+];
 
 export function Onboarding() {
   const { update } = useStore();
@@ -46,12 +53,7 @@ export function Onboarding() {
       theme,
       services,
       layout: {
-        groups: enabledIds.map((id) => ({
-          id,
-          serviceIds: [id],
-          splitDirection: "horizontal" as const,
-          splitSizes: {},
-        })),
+        groups: enabledIds.map((id) => soloGroup(id)),
         activeGroupId: enabledIds[0] ?? null,
       },
     });
@@ -77,52 +79,23 @@ export function Onboarding() {
               const isEnabled = enabled.has(service.id);
               const { isDragging, ...dragProps } = getItemProps(service.id);
               return (
-                <li
+                <ServiceListItem
                   key={service.id}
-                  {...dragProps}
-                  className={isDragging ? "opacity-40" : undefined}
-                >
-                  <div
-                    className={`flex w-full items-center gap-1 rounded-lg border px-2 py-1 text-left transition-colors ${
-                      isEnabled
-                        ? "border-primary bg-primary/10"
-                        : "border-base-300 hover:bg-base-200"
-                    }`}
-                  >
-                    <span className="cursor-grab p-2 text-base-content/40 active:cursor-grabbing">
-                      <GripVertical size={16} />
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => toggleService(service.id)}
-                      className="flex flex-1 items-center gap-3 py-2 text-left"
-                    >
-                      <ServiceIcon service={service} size={20} className="shrink-0" />
-                      <span className="flex-1 font-medium">{service.name}</span>
-                      {isEnabled && <Check size={18} className="text-primary" />}
-                    </button>
-                  </div>
-                </li>
+                  service={service}
+                  highlighted={isEnabled}
+                  isDragging={isDragging}
+                  dragProps={dragProps}
+                  variant="select"
+                  onMainClick={() => toggleService(service.id)}
+                  right={isEnabled && <Check size={18} className="text-primary" />}
+                />
               );
             })}
           </ul>
 
           <div>
             <p className="mb-2 text-sm font-medium text-base-content/70">Tema</p>
-            <div className="join">
-              {(["light", "dark", "system"] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className={`btn join-item btn-sm ${
-                    theme === option ? "btn-primary" : "btn-ghost"
-                  }`}
-                  onClick={() => setTheme(option)}
-                >
-                  {option === "light" ? "Claro" : option === "dark" ? "Oscuro" : "Sistema"}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl options={themeOptions} value={theme} onChange={setTheme} />
           </div>
 
           <button

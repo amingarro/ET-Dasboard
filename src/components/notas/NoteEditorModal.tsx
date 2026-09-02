@@ -7,7 +7,7 @@ import { DeleteNoteModal } from "./DeleteNoteModal";
 import { NoteColorPicker } from "./NoteColorPicker";
 import { RichTextEditor, type RichTextEditorHandle } from "./RichTextEditor";
 import { DatePickerPopover } from "./DatePickerPopover";
-import { getNoteColorClassName } from "./colors";
+import { getNoteColorClassName, noteCheckboxStyle } from "./colors";
 import type { Note, NoteChecklistItem } from "@/types/electron-api";
 
 const AUTOSAVE_DELAY_MS = 3000;
@@ -424,12 +424,7 @@ function ChecklistEditor({
               className="checkbox checkbox-sm"
               checked={item.done}
               onChange={(e) => onUpdateItem(item.id, { done: e.target.checked })}
-              style={
-                {
-                  "--input-color": `var(--note-${color}-fg)`,
-                  color: `var(--note-${color}-bg)`,
-                } as CSSProperties
-              }
+              style={noteCheckboxStyle(color)}
             />
             <input
               type="text"
