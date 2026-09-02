@@ -58,3 +58,25 @@ export function splitToolbarPosition(rect: DOMRect): CSSProperties {
     left: rect.left + GAP + TOOLBAR_MARGIN,
   };
 }
+
+// Same fixed height as the nav toolbar (visual consistency, and so its
+// position can be computed the same "anchor + constant" way as the toolbar
+// itself), stacked directly above it with a small gap.
+export const FIGMA_BUTTON_HEIGHT = 40;
+const STACK_GAP = 8;
+
+/** FigmaDesignButton position, stacked directly above the fullscreen toolbar. */
+export function fullscreenFigmaButtonPosition(): CSSProperties {
+  return {
+    bottom: GAP + TOOLBAR_MARGIN + TOOLBAR_HEIGHT + STACK_GAP,
+    left: GAP + TOOLBAR_MARGIN,
+  };
+}
+
+/** FigmaDesignButton position, stacked directly above the split-mode toolbar. */
+export function splitFigmaButtonPosition(rect: DOMRect): CSSProperties {
+  return {
+    top: rect.top + rect.height - GAP - TOOLBAR_MARGIN - TOOLBAR_HEIGHT - STACK_GAP - FIGMA_BUTTON_HEIGHT,
+    left: rect.left + GAP + TOOLBAR_MARGIN,
+  };
+}

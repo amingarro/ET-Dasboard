@@ -15,6 +15,8 @@ import { getServiceDefinition, type ServiceDefinition } from "@/lib/services";
 import { useStore } from "@/lib/store";
 import { SplitLayout } from "./SplitLayout";
 import { WebviewToolbar } from "./WebviewToolbar";
+import { FigmaDesignButton } from "./FigmaDesignButton";
+import { WebviewLightbox } from "./WebviewLightbox";
 import {
   GAP,
   RADIUS,
@@ -24,6 +26,8 @@ import {
   splitCornerPosition,
   fullscreenToolbarPosition,
   splitToolbarPosition,
+  fullscreenFigmaButtonPosition,
+  splitFigmaButtonPosition,
 } from "./webviewGeometry";
 import { useToolbarHistory } from "./useToolbarHistory";
 import { useWebviewRetry, ERROR_CODE_ABORTED } from "./useWebviewRetry";
@@ -48,10 +52,12 @@ interface ServiceWebviewProps {
   onLoadingChange: (id: string, loading: boolean) => void;
   onNavigate: (id: string, url: string) => void;
   onRefReady: (id: string, el: WebviewElement | null) => void;
+  onFigmaDesign: (id: string, url: string | null | undefined) => void;
 }
 
 interface WebviewNavigateEvent extends Event {
   url: string;
+  isMainFrame: boolean;
 }
 
 // did-frame-navigate: same "a full top-level navigation completed" moment as
@@ -88,6 +94,7 @@ function ServiceWebview({
   onLoadingChange,
   onNavigate,
   onRefReady,
+  onFigmaDesign,
 }: ServiceWebviewProps) {
   const ref = useRef<HTMLElement | null>(null);
   // Only ever consulted once, at mount — the whole point is remembering
@@ -112,6 +119,11 @@ function ServiceWebview({
 
     function handleIpcMessage(e: Event) {
       const event = e as IpcMessageEvent;
+      if (event.channel === "figma-design") {
+        const payload = event.args[0] as { url: string | null };
+        onFigmaDesign(service.id, payload.url);
+        return;
+      }
       if (event.channel !== "app-notification") return;
       if (!notificationsEnabled) return;
       const payload = event.args[0] as { title: string; body: string };
@@ -134,7 +146,21 @@ function ServiceWebview({
       setLoadError(null);
     };
     const handleStopLoading = () => onLoadingChange(service.id, false);
-    const handleInPageNavigate = (e: Event) => onNavigate(service.id, (e as WebviewNavigateEvent).url);
+    // isMainFrame guard here mirrors handleFrameNavigate below — a same-document
+    // (pushState/hash) navigation happening INSIDE a nested iframe (Figma's
+    // embed inside a Jira ticket, for one) also fires this event on the
+    // webview's WebContents, with the iframe's own foreign URL. Without this
+    // check that foreign URL got persisted as this service's lastUrl, so the
+    // NEXT launch booted straight into it (found by hand: Jira's lastUrl kept
+    // getting overwritten with figma.com URLs after opening the design panel).
+    const handleInPageNavigate = (e: Event) => {
+      const event = e as WebviewNavigateEvent;
+      if (!event.isMainFrame) return;
+      // Back to "searching" — a real navigation means whatever the Figma
+      // detector last found (or didn't) is stale until the next poll report.
+      onFigmaDesign(service.id, undefined);
+      onNavigate(service.id, event.url);
+    };
     const handleFrameNavigate = (e: Event) => {
       const event = e as WebviewFrameNavigateEvent;
       // Sub-frame commits (an embedded gadget/iframe loading its own URL)
@@ -148,6 +174,7 @@ function ServiceWebview({
         });
         return;
       }
+      onFigmaDesign(service.id, undefined);
       onNavigate(service.id, event.url);
     };
     const handleFailLoad = (e: Event) => {
@@ -179,7 +206,15 @@ function ServiceWebview({
       el.removeEventListener("did-fail-load", handleFailLoad);
       onLoadingChange(service.id, false);
     };
-  }, [service.id, notificationsEnabled, onLoadingChange, onNavigate, setLoadError]);
+  }, [
+    service.id,
+    service.partition,
+    notificationsEnabled,
+    onLoadingChange,
+    onNavigate,
+    onFigmaDesign,
+    setLoadError,
+  ]);
 
   return (
     <>
@@ -248,15 +283,54 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
     useToolbarHistory(webviewRefs);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // undefined = still searching since the last navigation, null = confirmed
+  // no Figma design on this page, string = its real file URL — see
+  // FigmaDesignButton and webview-preload.ts's reportFigmaDesign.
+  const [figmaUrls, setFigmaUrls] = useState<Record<string, string | null | undefined>>({});
+  const figmaSearchTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const FIGMA_SEARCH_TIMEOUT_MS = 3000;
+
+  // A popup a webview tried to open (window.open/target=_blank), denied by
+  // main.ts and rerouted here — see WebviewLightbox.tsx. `popupMinimized` is
+  // lifted up (rather than local to WebviewLightbox) so the Figma button
+  // below can hide itself in favor of the bubble when they'd otherwise
+  // occupy the exact same spot.
+  const [popup, setPopup] = useState<{ url: string; partition: string } | null>(null);
+  const [popupMinimized, setPopupMinimized] = useState(false);
+  const openPopup = useCallback((partition: string, url: string) => {
+    setPopup({ partition, url });
+    setPopupMinimized(false);
+  }, []);
+  useEffect(() => {
+    return window.electronAPI.onWebviewPopup(({ partition, url }) => openPopup(partition, url));
+  }, [openPopup]);
 
   useEffect(() => {
+    const timers = figmaSearchTimers.current;
     return () => {
       if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      Object.values(timers).forEach(clearTimeout);
     };
   }, []);
 
   const handleRefReady = useCallback((id: string, el: WebviewElement | null) => {
     webviewRefs.current[id] = el;
+  }, []);
+
+  const handleFigmaDesign = useCallback((id: string, url: string | null | undefined) => {
+    if (figmaSearchTimers.current[id]) {
+      clearTimeout(figmaSearchTimers.current[id]);
+      delete figmaSearchTimers.current[id];
+    }
+    // A real report (found or confirmed absent) settles immediately; only
+    // "back to searching" (a fresh navigation) gets a timeout, so the button
+    // doesn't say "Buscando…" forever on a page that'll never have a design.
+    if (url === undefined) {
+      figmaSearchTimers.current[id] = setTimeout(() => {
+        setFigmaUrls((prev) => (prev[id] === undefined ? { ...prev, [id]: null } : prev));
+      }, FIGMA_SEARCH_TIMEOUT_MS);
+    }
+    setFigmaUrls((prev) => (prev[id] === url ? prev : { ...prev, [id]: url }));
   }, []);
 
   const toggleToolbar = useCallback((id: string) => {
@@ -325,6 +399,29 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
   const activeGroup = state.layout.groups.find((g) => g.id === state.layout.activeGroupId);
   const isSplit = Boolean(activeGroup && activeGroup.serviceIds.length > 1);
   const panelIds = activeGroup?.serviceIds ?? [];
+
+  // Whichever service actually owns the open popup (matched by partition).
+  // Two things depend on this: whether the popup should be visible at all
+  // right now (only while its own tab is on screen — a popup opened from
+  // Jira has no business floating on top of Gmail after you switch tabs,
+  // see WebviewLightbox's `visible` prop) and, when the owner is the
+  // Figma-detecting service, where to anchor the minimized bubble so it
+  // lands exactly on top of the FigmaDesignButton it's standing in for
+  // (falls back to WebviewLightbox's own default corner for any other
+  // popup source).
+  const popupOwner = popup ? enabledServices.find((s) => s.partition === popup.partition) : undefined;
+  const isPopupOwnerFullscreen = Boolean(
+    popupOwner && !isSplit && activeGroup?.serviceIds[0] === popupOwner.id,
+  );
+  const popupOwnerSplitRect =
+    isSplit && popupOwner && panelIds.includes(popupOwner.id) ? rects[popupOwner.id] : undefined;
+  const isPopupOwnerVisible = isPopupOwnerFullscreen || Boolean(popupOwnerSplitRect);
+  const popupAnchorStyle: CSSProperties | undefined =
+    popupOwner?.id === "atlassian" && isPopupOwnerVisible
+      ? isPopupOwnerFullscreen
+        ? fullscreenFigmaButtonPosition()
+        : splitFigmaButtonPosition(popupOwnerSplitRect as DOMRect)
+      : undefined;
 
   const handleRectChange = useCallback((id: string, rect: DOMRect | null) => {
     setRects((prev) => {
@@ -424,6 +521,7 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
               onLoadingChange={onLoadingChange}
               onNavigate={handleNavigate}
               onRefReady={handleRefReady}
+              onFigmaDesign={handleFigmaDesign}
             />
 
             {isVisible && (
@@ -466,11 +564,36 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
                   )}
                   copied={copiedId === service.id}
                 />
+                {service.id === "atlassian" &&
+                  !(popup && popupMinimized && popup.partition === service.partition) && (
+                    <FigmaDesignButton
+                      style={
+                        isFullscreenActive
+                          ? fullscreenFigmaButtonPosition()
+                          : splitFigmaButtonPosition(splitRect as DOMRect)
+                      }
+                      url={figmaUrls[service.id]}
+                      onOpen={(url) => openPopup(service.partition, url)}
+                    />
+                  )}
               </>
             )}
           </Fragment>
         );
       })}
+
+      {popup && (
+        <WebviewLightbox
+          key={popup.url}
+          url={popup.url}
+          partition={popup.partition}
+          minimized={popupMinimized}
+          onMinimizedChange={setPopupMinimized}
+          anchorStyle={popupAnchorStyle}
+          visible={isPopupOwnerVisible}
+          onClose={() => setPopup(null)}
+        />
+      )}
     </div>
   );
 }

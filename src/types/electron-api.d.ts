@@ -101,6 +101,7 @@ declare global {
       closeNotificationPopup: () => void;
       checkForUpdates: () => Promise<UpdateCheckResult>;
       openExternal: (url: string) => void;
+      onWebviewPopup: (callback: (payload: { url: string; partition: string }) => void) => () => void;
       downloadUpdate: () => Promise<{ error: string | null }>;
       relaunchApp: () => void;
       onUpdateDownloadProgress: (callback: (percent: number) => void) => () => void;

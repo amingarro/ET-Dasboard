@@ -375,7 +375,7 @@ function ChecklistEditor({
           title={allDone ? "Destildar todo" : "Tildar todo"}
           onClick={onToggleAll}
           disabled={checklist.length === 0}
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${
+          className={`flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md disabled:cursor-not-allowed ${
             allDone ? "" : "border-2 border-base-content/25"
           }`}
           // Same fg/bg-swap trick as the item checkboxes below — this button
@@ -438,7 +438,7 @@ function ChecklistEditor({
               type="button"
               title="Borrar ítem"
               onClick={() => onRemoveItem(item.id)}
-              className="rounded p-1 text-base-content/30 opacity-0 hover:bg-base-300 hover:text-error group-hover:opacity-100"
+              className="cursor-pointer rounded p-1 text-base-content/30 opacity-0 hover:bg-base-300 hover:text-error group-hover:opacity-100"
             >
               <X size={14} />
             </button>
@@ -451,7 +451,7 @@ function ChecklistEditor({
           type="button"
           title="Agregar ítem"
           onClick={onAddItem}
-          className="shrink-0 text-base-content/40 hover:text-base-content"
+          className="shrink-0 cursor-pointer text-base-content/40 hover:text-base-content"
         >
           <Plus size={16} />
         </button>

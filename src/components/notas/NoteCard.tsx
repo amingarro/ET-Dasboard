@@ -74,7 +74,7 @@ export function NoteCard({ note, onOpen, onTogglePin, onToggleChecklistItem, onO
             // bg-current picks up whatever text color this button inherits
             // (the note's own fg when colored, base-content otherwise) —
             // always has a background, never a bare floating-line icon.
-            className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+            className={`shrink-0 cursor-pointer rounded-lg p-1.5 transition-colors ${
               note.pinned ? "bg-current/20" : "bg-current/10 hover:bg-current/15"
             }`}
           >

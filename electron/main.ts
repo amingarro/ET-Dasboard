@@ -460,6 +460,34 @@ app.whenReady().then(async () => {
       console.log("[webview] FAILED:", errorCode, errorDescription, validatedURL);
     });
 
+    const service = defaultServices.find(
+      (s) => session.fromPartition(s.partition) === contents.session,
+    );
+
+    // A page inside a <webview> asking for a popup (window.open, target=_blank)
+    // gets silently dropped by Electron unless explicitly handled. Deny the
+    // real popup and hand the URL to the renderer instead, which shows it in
+    // an in-app modal <webview> on the SAME partition, so it inherits that
+    // partition's already-registered stripFrameHeaders (see above) for free.
+    //
+    // This only ever catches popups from the webview's OWN top frame — a
+    // popup requested from a cross-origin iframe nested inside it (e.g.
+    // Figma's embed iframe in a Jira ticket) never reaches this handler at
+    // all, a known Electron limitation with out-of-process iframes (confirmed
+    // by hand: no web-contents-created/setWindowOpenHandler/will-navigate/
+    // did-create-window fires for it, for real repeated clicks). No workaround
+    // for that case currently — Jira's own "Inspeccionar en Figma"/"Abrir como
+    // prototipo" links (in Jira's OWN top-level page, not the nested iframe)
+    // are the reliable way to reach this modal for a Figma design today.
+    contents.setWindowOpenHandler(({ url }) => {
+      if (service) {
+        mainWindow?.webContents.send("webview-popup", { url, partition: service.partition });
+      } else {
+        shell.openExternal(url);
+      }
+      return { action: "deny" };
+    });
+
     // Electron shows no context menu at all by default, for a webview or
     // otherwise — every embedded page silently swallowed right-clicks until
     // this was wired up by hand.
@@ -522,6 +550,10 @@ app.whenReady().then(async () => {
           click: () => contents.navigationHistory.goForward(),
         },
         { label: "Recargar", click: () => contents.reload() },
+        {
+          label: "Inspeccionar elemento",
+          click: () => contents.inspectElement(params.x, params.y),
+        },
       );
 
       Menu.buildFromTemplate(items).popup();

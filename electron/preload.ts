@@ -37,6 +37,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
   openExternal: (url: string) => ipcRenderer.send("open-external", url),
 
+  // Main process -> main window: a webview tried to open a popup (window.open,
+  // target=_blank) and it was denied — show it in an in-app modal instead.
+  onWebviewPopup: (callback: (payload: { url: string; partition: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { url: string; partition: string }) =>
+      callback(payload);
+    ipcRenderer.on("webview-popup", listener);
+    return () => ipcRenderer.removeListener("webview-popup", listener);
+  },
+
   downloadUpdate: () => ipcRenderer.invoke("download-update"),
   relaunchApp: () => ipcRenderer.send("relaunch-app"),
   onUpdateDownloadProgress: (callback: (percent: number) => void) => {

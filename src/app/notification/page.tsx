@@ -66,7 +66,7 @@ export default function NotificationPopupPage() {
                 e.stopPropagation();
                 window.electronAPI.closeNotificationPopup();
               }}
-              className="shrink-0 rounded-full p-1 text-base-content/40 hover:bg-base-200 hover:text-base-content"
+              className="shrink-0 cursor-pointer rounded-full p-1 text-base-content/40 hover:bg-base-200 hover:text-base-content"
             >
               <X size={14} />
             </button>

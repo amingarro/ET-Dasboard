@@ -105,7 +105,7 @@ export function CumpleanosPanel() {
               <button
                 type="button"
                 title={`Borrar a ${b.name}`}
-                className="rounded-lg p-1.5 text-base-content/40 hover:bg-base-300 hover:text-error"
+                className="cursor-pointer rounded-lg p-1.5 text-base-content/40 hover:bg-base-300 hover:text-error"
                 onClick={() => deleteBirthday(b.id)}
               >
                 <Trash2 size={14} />

@@ -161,7 +161,7 @@ export function Shell() {
       />
 
       <motion.div
-        className="flex h-full flex-1"
+        className="relative flex h-full flex-1"
         animate={{ paddingLeft: pinned ? dockWidth : 0 }}
         transition={{ type: "spring", stiffness: 420, damping: 42 }}
       >

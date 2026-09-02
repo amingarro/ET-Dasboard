@@ -130,7 +130,7 @@ export function ServiciosPanel() {
                       : `Prender notificaciones de ${service.name}`
                   }
                   onClick={() => toggleNotifications(service.id)}
-                  className={`rounded-lg p-2 hover:bg-base-300 ${
+                  className={`cursor-pointer rounded-lg p-2 hover:bg-base-300 ${
                     notificationsEnabled ? "text-base-content/70" : "text-base-content/30"
                   }`}
                 >
@@ -164,7 +164,7 @@ export function ServiciosPanel() {
                         type="button"
                         title={`Sacar ${service.name} del grupo`}
                         onClick={() => removeFromGroup(group.id, id)}
-                        className="ml-1 text-base-content/50 hover:text-base-content"
+                        className="ml-1 cursor-pointer text-base-content/50 hover:text-base-content"
                       >
                         <X size={12} />
                       </button>
