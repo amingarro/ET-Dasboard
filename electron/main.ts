@@ -64,6 +64,26 @@ if (isDev) {
   }
 }
 
+// Without this, launching the app a second time (e.g. a stray `npm run dev`
+// left over from an earlier session, or a double-click while it's already
+// running) spawns a second full process with its own Tray. Two live trays
+// look like one extra icon in the GNOME panel, and if either process is later
+// killed forcefully (crash, `pkill`) rather than quit cleanly, the icon it
+// registered over D-Bus can outlive it — the shell has no way to know that
+// process is gone, so the icon stays stuck (often mis-sized, unresponsive to
+// clicks) until the shell/session restarts. Enforcing a single instance
+// means there is never more than one Tray to begin with.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -274,6 +294,49 @@ function stripFrameHeaders(ses: Electron.Session) {
   });
 }
 
+// The bug this setting exists to fix: a user's own language flagged word-by-
+// word as misspelled. Electron's built-in (Hunspell, on Linux/Windows)
+// spellchecker doesn't auto-detect what language you're typing in — left
+// alone it silently defaults to whatever Chromium guessed from the OS
+// locale at first run, with no obvious way for a user to tell that's what
+// happened or fix it themselves.
+function resolveSpellcheckLanguages(setting: StoreSchema["spellcheckLanguage"], ses: Electron.Session) {
+  if (setting === "es") return ["es"];
+  if (setting === "en") return ["en"];
+  // "system": best-effort automatic — intersect the OS's preferred languages
+  // with what this build's Hunspell dictionaries actually cover (checked by
+  // hand: 'es-AR'/'es-419'/'en-US' etc. are in there, but far from every
+  // locale is), falling back to English rather than leaving the session on
+  // whatever language was explicitly set before switching back to "system".
+  const available = new Set(ses.availableSpellCheckerLanguages);
+  const matched = app.getPreferredSystemLanguages().filter((lang) => available.has(lang));
+  return matched.length > 0 ? matched : ["en"];
+}
+
+// Applies to every service's own partitioned session (the webviews) AND the
+// default session (the main window's own UI — namely the Notes editor's
+// rich-text field) — both have editable text a user can type into.
+function applySpellcheckLanguages(setting: StoreSchema["spellcheckLanguage"]) {
+  for (const ses of [session.defaultSession, ...defaultServices.map((s) => session.fromPartition(s.partition))]) {
+    ses.setSpellCheckerLanguages(resolveSpellcheckLanguages(setting, ses));
+  }
+}
+
+// Cached per name — the context-menu handler below rebuilds its whole
+// template on every right-click, so this avoids re-reading+re-decoding the
+// same PNG off disk on every single one. @2x siblings (build/menu-icons/
+// <name>@2x.png, generated alongside these) are picked up automatically by
+// Electron's own HiDPI convention, same as the tray icon.
+const menuIconCache = new Map<string, Electron.NativeImage>();
+function menuIcon(name: string): Electron.NativeImage | undefined {
+  if (menuIconCache.has(name)) return menuIconCache.get(name);
+  const iconPath = path.join(__dirname, `../build/menu-icons/${name}.png`);
+  if (!fs.existsSync(iconPath)) return undefined;
+  const image = nativeImage.createFromPath(iconPath);
+  menuIconCache.set(name, image);
+  return image;
+}
+
 function createWindow() {
   const iconPath = path.join(__dirname, "../build/icon.png");
   // Passing `icon` as a string to the BrowserWindow constructor doesn't
@@ -342,15 +405,17 @@ function createTray(win: BrowserWindow) {
     Menu.buildFromTemplate([
       {
         label: "Mostrar",
+        icon: menuIcon("eye"),
         click: () => {
           win.show();
           win.focus();
         },
       },
-      { label: "Ocultar", click: () => win.hide() },
+      { label: "Ocultar", icon: menuIcon("eye-off"), click: () => win.hide() },
       { type: "separator" },
       {
         label: "Salir",
+        icon: menuIcon("log-out"),
         click: () => {
           isQuitting = true;
           app.quit();
@@ -496,8 +561,16 @@ app.whenReady().then(async () => {
 
       if (params.linkURL) {
         items.push(
-          { label: "Abrir enlace en el navegador", click: () => shell.openExternal(params.linkURL) },
-          { label: "Copiar dirección del enlace", click: () => clipboard.writeText(params.linkURL) },
+          {
+            label: "Abrir enlace en el navegador",
+            icon: menuIcon("open-external"),
+            click: () => shell.openExternal(params.linkURL),
+          },
+          {
+            label: "Copiar dirección del enlace",
+            icon: menuIcon("link"),
+            click: () => clipboard.writeText(params.linkURL),
+          },
           { type: "separator" },
         );
       }
@@ -513,6 +586,7 @@ app.whenReady().then(async () => {
         items.push(
           {
             label: "Añadir al diccionario",
+            icon: menuIcon("add-dictionary"),
             click: () => contents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
           },
           { type: "separator" },
@@ -521,11 +595,27 @@ app.whenReady().then(async () => {
 
       if (params.isEditable) {
         items.push(
-          { label: "Cortar", enabled: params.editFlags.canCut, click: () => contents.cut() },
-          { label: "Copiar", enabled: params.editFlags.canCopy, click: () => contents.copy() },
-          { label: "Pegar", enabled: params.editFlags.canPaste, click: () => contents.paste() },
+          {
+            label: "Cortar",
+            icon: menuIcon("scissors"),
+            enabled: params.editFlags.canCut,
+            click: () => contents.cut(),
+          },
+          {
+            label: "Copiar",
+            icon: menuIcon("copy"),
+            enabled: params.editFlags.canCopy,
+            click: () => contents.copy(),
+          },
+          {
+            label: "Pegar",
+            icon: menuIcon("paste"),
+            enabled: params.editFlags.canPaste,
+            click: () => contents.paste(),
+          },
           {
             label: "Seleccionar todo",
+            icon: menuIcon("select-all"),
             enabled: params.editFlags.canSelectAll,
             click: () => contents.selectAll(),
           },
@@ -533,7 +623,11 @@ app.whenReady().then(async () => {
         );
       } else if (params.selectionText) {
         items.push(
-          { label: "Copiar", click: () => clipboard.writeText(params.selectionText) },
+          {
+            label: "Copiar",
+            icon: menuIcon("copy"),
+            click: () => clipboard.writeText(params.selectionText),
+          },
           { type: "separator" },
         );
       }
@@ -541,17 +635,25 @@ app.whenReady().then(async () => {
       items.push(
         {
           label: "Atrás",
+          icon: menuIcon("back"),
           enabled: contents.navigationHistory.canGoBack(),
           click: () => contents.navigationHistory.goBack(),
         },
         {
           label: "Adelante",
+          icon: menuIcon("forward"),
           enabled: contents.navigationHistory.canGoForward(),
           click: () => contents.navigationHistory.goForward(),
         },
-        { label: "Recargar", click: () => contents.reload() },
+        { label: "Recargar", icon: menuIcon("reload"), click: () => contents.reload() },
+        {
+          label: "Abrir en el navegador",
+          icon: menuIcon("open-external"),
+          click: () => shell.openExternal(contents.getURL()),
+        },
         {
           label: "Inspeccionar elemento",
+          icon: menuIcon("inspect"),
           click: () => contents.inspectElement(params.x, params.y),
         },
       );
@@ -561,6 +663,7 @@ app.whenReady().then(async () => {
   });
 
   const store = await getStore();
+  applySpellcheckLanguages(store.store.spellcheckLanguage);
 
   ipcMain.handle("get-webview-preload-path", () =>
     pathToFileURL(path.join(__dirname, "webview-preload.js")).toString(),
@@ -623,6 +726,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("store:get-all", () => store.store);
   ipcMain.handle("store:set", (_event, patch: Partial<StoreSchema>) => {
     store.set(patch);
+    if (patch.spellcheckLanguage) applySpellcheckLanguages(patch.spellcheckLanguage);
     return store.store;
   });
 
@@ -736,6 +840,14 @@ app.whenReady().then(async () => {
 
   app.on("before-quit", () => {
     isQuitting = true;
+  });
+
+  // Belt-and-suspenders for the zombie-tray-icon issue above: on a clean
+  // quit, explicitly tear down the Tray rather than relying on it being
+  // garbage-collected / cleaned up implicitly as the process exits.
+  app.on("will-quit", () => {
+    tray?.destroy();
+    tray = null;
   });
 });
 

@@ -25,10 +25,17 @@ export interface LayoutState {
 
 export type DockMode = "expanded" | "compact" | "auto";
 
+// "system" asks Chromium to infer from the OS locale (best-effort — see
+// resolveSpellcheckLanguages in main.ts). "es"/"en" pin the Hunspell
+// dictionary explicitly, for when that inference gets it wrong (the bug
+// this setting exists to fix: a user's own language flagged as misspelled).
+export type SpellcheckLanguage = "es" | "en" | "system";
+
 export interface StoreSchema {
   onboarded: boolean;
   theme: "light" | "dark" | "system";
   dockMode: DockMode;
+  spellcheckLanguage: SpellcheckLanguage;
   services: ServiceConfig[];
   layout: LayoutState;
   driveSyncEnabled: boolean;
@@ -43,6 +50,7 @@ const defaultStoreValues: StoreSchema = {
   onboarded: false,
   theme: "system",
   dockMode: "expanded",
+  spellcheckLanguage: "system",
   services: defaultServices.map((service, index) => ({
     id: service.id,
     enabled: true,
@@ -140,6 +148,9 @@ export async function getStore(): Promise<AppStore> {
     }
     if (!current.dockMode) {
       storeInstance.set({ dockMode: "expanded" });
+    }
+    if (!current.spellcheckLanguage) {
+      storeInstance.set({ spellcheckLanguage: "system" });
     }
     if (current.driveSyncEnabled === undefined) {
       storeInstance.set({ driveSyncEnabled: false });

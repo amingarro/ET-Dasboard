@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Check, ChevronRight, Copy, Home } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronRight, Copy, Home, RotateCw } from "lucide-react";
 import type { CSSProperties } from "react";
 
 interface WebviewToolbarProps {
@@ -11,6 +11,7 @@ interface WebviewToolbarProps {
   onHome: () => void;
   onBack: () => void;
   onForward: () => void;
+  onReload: () => void;
   onCopyUrl: () => void;
   canGoBack: boolean;
   canGoForward: boolean;
@@ -57,6 +58,7 @@ export function WebviewToolbar({
   onHome,
   onBack,
   onForward,
+  onReload,
   onCopyUrl,
   canGoBack,
   canGoForward,
@@ -94,6 +96,9 @@ export function WebviewToolbar({
             </ToolbarButton>
             <ToolbarButton onClick={onHome} title="Ir al inicio">
               <Home size={16} />
+            </ToolbarButton>
+            <ToolbarButton onClick={onReload} title="Recargar">
+              <RotateCw size={16} />
             </ToolbarButton>
             <ToolbarButton onClick={onCopyUrl} title="Copiar URL">
               {copied ? <Check size={16} className="text-success" /> : <Copy size={16} />}

@@ -14,6 +14,7 @@ const initialState: StoreSchema = {
   onboarded: false,
   theme: "system",
   dockMode: "expanded",
+  spellcheckLanguage: "system",
   services: [],
   layout: {
     groups: [],

@@ -84,6 +84,25 @@ interface WebviewFailLoadEvent extends Event {
   isMainFrame: boolean;
 }
 
+// Fires for every keydown/keyup inside the guest page, before the guest
+// itself sees it — the only way to catch Ctrl+R/Ctrl+Shift+R while focus is
+// inside the <webview> (a plain document-level React/DOM keydown listener on
+// the host never sees key events typed into the guest's own separate
+// renderer process).
+interface WebviewBeforeInputEvent extends Event {
+  input: {
+    type: "keyDown" | "keyUp";
+    key: string;
+    control: boolean;
+    meta: boolean;
+    shift: boolean;
+  };
+}
+
+function isReloadShortcut(key: string, control: boolean, meta: boolean) {
+  return key.toLowerCase() === "r" && (control || meta);
+}
+
 function ServiceWebview({
   service,
   style,
@@ -185,8 +204,24 @@ function ServiceWebview({
       if (!event.isMainFrame || event.errorCode === ERROR_CODE_ABORTED) return;
       setLoadError({ code: event.errorCode, description: event.errorDescription });
     };
+    // Ctrl+R / Ctrl+Shift+R (Cmd+R / Cmd+Shift+R on mac) reload this webview
+    // even while the guest page itself has keyboard focus — see the type
+    // comment on WebviewBeforeInputEvent above for why this can't be a plain
+    // document-level keydown listener.
+    const handleBeforeInput = (e: Event) => {
+      const event = e as WebviewBeforeInputEvent;
+      const { input } = event;
+      if (input.type !== "keyDown" || !isReloadShortcut(input.key, input.control, input.meta)) return;
+      event.preventDefault();
+      if (input.shift) {
+        (ref.current as WebviewElement | null)?.reloadIgnoringCache();
+      } else {
+        (ref.current as WebviewElement | null)?.reload();
+      }
+    };
 
     el.addEventListener("ipc-message", handleIpcMessage);
+    el.addEventListener("before-input-event", handleBeforeInput);
     el.addEventListener("did-start-loading", handleStartLoading);
     el.addEventListener("did-stop-loading", handleStopLoading);
     // did-frame-navigate: full page loads (see the type comment above for
@@ -199,6 +234,7 @@ function ServiceWebview({
     el.addEventListener("did-fail-load", handleFailLoad);
     return () => {
       el.removeEventListener("ipc-message", handleIpcMessage);
+      el.removeEventListener("before-input-event", handleBeforeInput);
       el.removeEventListener("did-start-loading", handleStartLoading);
       el.removeEventListener("did-stop-loading", handleStopLoading);
       el.removeEventListener("did-frame-navigate", handleFrameNavigate);
@@ -341,6 +377,10 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
     webviewRefs.current[id]?.loadURL(url);
   }, []);
 
+  const handleReload = useCallback((id: string) => {
+    webviewRefs.current[id]?.reload();
+  }, []);
+
   const handleCopyUrl = useCallback((id: string) => {
     const url = webviewRefs.current[id]?.getURL();
     if (!url) return;
@@ -399,6 +439,26 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
   const activeGroup = state.layout.groups.find((g) => g.id === state.layout.activeGroupId);
   const isSplit = Boolean(activeGroup && activeGroup.serviceIds.length > 1);
   const panelIds = activeGroup?.serviceIds ?? [];
+
+  // Fallback for Ctrl+R/Ctrl+Shift+R when focus is on the host chrome (dock,
+  // toolbar, settings…) rather than inside a webview — the guest-focused
+  // case is handled per-webview via before-input-event in ServiceWebview
+  // above, since key events typed into a <webview>'s own renderer process
+  // never reach a document-level listener on the host at all.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isReloadShortcut(e.key, e.ctrlKey, e.metaKey)) return;
+      e.preventDefault();
+      panelIds.forEach((id) => {
+        const wv = webviewRefs.current[id];
+        if (!wv) return;
+        if (e.shiftKey) wv.reloadIgnoringCache();
+        else wv.reload();
+      });
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [panelIds]);
 
   // Whichever service actually owns the open popup (matched by partition).
   // Two things depend on this: whether the popup should be visible at all
@@ -556,6 +616,7 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
                   onHome={() => handleHome(service.id, service.url)}
                   onBack={() => handleBack(service.id)}
                   onForward={() => handleForward(service.id)}
+                  onReload={() => handleReload(service.id)}
                   onCopyUrl={() => handleCopyUrl(service.id)}
                   canGoBack={Boolean(toolbarHistory[service.id] && toolbarHistory[service.id].index > 0)}
                   canGoForward={Boolean(

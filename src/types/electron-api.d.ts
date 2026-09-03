@@ -20,6 +20,8 @@ export interface LayoutState {
 
 export type DockMode = "expanded" | "compact" | "auto";
 
+export type SpellcheckLanguage = "es" | "en" | "system";
+
 export interface NotificationPayload {
   serviceId: string;
   title: string;
@@ -38,6 +40,7 @@ export interface StoreSchema {
   onboarded: boolean;
   theme: "light" | "dark" | "system";
   dockMode: DockMode;
+  spellcheckLanguage: SpellcheckLanguage;
   services: ServiceConfig[];
   layout: LayoutState;
   driveSyncEnabled: boolean;

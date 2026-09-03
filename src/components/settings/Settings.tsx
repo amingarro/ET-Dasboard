@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cake, LayoutGrid, RefreshCw, Sun, X } from "lucide-react";
+import { Cake, LayoutGrid, RefreshCw, SpellCheck, Sun, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { GoogleDriveLogo } from "@/components/GoogleDriveLogo";
 import { useStore } from "@/lib/store";
@@ -11,10 +11,11 @@ import { ServiciosPanel } from "@/components/settings/ServiciosPanel";
 import { CumpleanosPanel } from "@/components/settings/CumpleanosPanel";
 import { SyncPanel } from "@/components/settings/SyncPanel";
 import { AparienciaPanel } from "@/components/settings/AparienciaPanel";
+import { OrtografiaPanel } from "@/components/settings/OrtografiaPanel";
 import { ReleaseNotesModal } from "@/components/settings/ReleaseNotesModal";
 import type { UpdateCheckResult } from "@/types/electron-api";
 
-type SettingsCategory = "servicios" | "cumpleanos" | "sync" | "apariencia";
+type SettingsCategory = "servicios" | "cumpleanos" | "sync" | "apariencia" | "ortografia";
 
 type UpdateState =
   | { status: "idle" }
@@ -107,6 +108,7 @@ export function Settings({ onClose }: SettingsProps) {
     },
     { id: "sync", label: "Sincronización" },
     { id: "apariencia", label: "Apariencia" },
+    { id: "ortografia", label: "Corrector ortográfico" },
   ];
 
   return (
@@ -163,6 +165,7 @@ export function Settings({ onClose }: SettingsProps) {
                       {cat.id === "cumpleanos" && <Cake size={18} />}
                       {cat.id === "sync" && <GoogleDriveLogo size={17} />}
                       {cat.id === "apariencia" && <Sun size={18} />}
+                      {cat.id === "ortografia" && <SpellCheck size={18} />}
                     </span>
                     <span className="flex-1">{cat.label}</span>
                     {cat.badge && (
@@ -276,6 +279,7 @@ export function Settings({ onClose }: SettingsProps) {
               {category === "cumpleanos" && <CumpleanosPanel />}
               {category === "sync" && <SyncPanel />}
               {category === "apariencia" && <AparienciaPanel />}
+              {category === "ortografia" && <OrtografiaPanel />}
             </div>
           </div>
         </div>
