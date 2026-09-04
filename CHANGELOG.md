@@ -2,6 +2,16 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.23] - 2026-09-04
+
+- Pantheon se suma al dock como un servicio más, con su logo real y sus colores de marca (insignia amarilla, ícono negro).
+- Los íconos del menú lateral (servicios, notas, configuración y demás) ahora son bastante más grandes y fáciles de ver y tocar.
+- Nueva sección "Corrector ortográfico" en Configuración: permite fijar el idioma (español, inglés o automático) en vez de depender del que Chromium adivina del sistema, que no siempre acierta.
+- El menú que aparece al hacer click derecho y el menú de la bandeja del sistema ahora muestran un ícono junto a cada opción, no solo texto.
+- Ctrl+R / Ctrl+Shift+R ahora recargan la página activa aunque el foco no esté puesto en ella, y se agregó un botón de recargar al control flotante de cada página.
+- Corregido: abrir la app una segunda vez mientras ya está abierta ahora enfoca la ventana existente en vez de abrir una instancia duplicada.
+- Mejoras internas de arquitectura y rendimiento (entre ellas, un problema que podía hacer desaparecer el ícono de la bandeja del sistema en Linux).
+
 ## [0.1.22] - 2026-09-02
 
 - Ahora podés ver los diseños de Figma vinculados a un ticket de Jira sin salir de la app: aparece un botón con el logo de Figma que abre el diseño en una ventana propia, en vez de dejarte perdido en una página de Figma sin salida.
