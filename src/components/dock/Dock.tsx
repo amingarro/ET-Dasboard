@@ -164,9 +164,9 @@ export function Dock({
           onClick={toggleSplitDirection}
           icon={
             activeGroup.splitDirection === "horizontal" ? (
-              <SplitSquareHorizontal size={20} />
+              <SplitSquareHorizontal size={26} />
             ) : (
-              <SplitSquareVertical size={20} />
+              <SplitSquareVertical size={26} />
             )
           }
         />
@@ -177,7 +177,7 @@ export function Dock({
         title="Notas"
         label="Notas"
         onClick={onOpenNotas}
-        icon={<NotasLogo size={20} />}
+        icon={<NotasLogo size={26} />}
       />
 
       <DockAction
@@ -192,7 +192,7 @@ export function Dock({
                 packaged app's file:// load. See notification/page.tsx for the
                 full explanation. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="app-icon.png" alt="" width={28} height={28} className="rounded-md" />
+            <img src="app-icon.png" alt="" width={36} height={36} className="rounded-md" />
             {todaysBirthdays.length > 0 && (
               <span className="aura aura-xs absolute -top-2 -right-2 block w-fit rotate-3 rounded-full text-primary bg-primary/20">
                 <span className="badge badge-primary badge-xs px-1.5 text-[9px] font-bold text-white">
@@ -231,7 +231,7 @@ function DockAction({ expanded, title, label, icon, onClick }: DockActionProps) 
       whileTap={{ scale: 0.96 }}
       whileHover={{ scale: expanded ? 1 : 1.06 }}
       className={`flex cursor-pointer items-center gap-3 rounded-xl text-base-content/70 hover:bg-base-300 ${
-        expanded ? "h-10 w-full px-3" : "h-11 w-11 justify-center"
+        expanded ? "h-11 w-full px-2" : "h-11 w-11 justify-center"
       }`}
     >
       {icon}
@@ -281,11 +281,11 @@ function GroupButton({
   const icon = isGroup ? (
     <span className="grid shrink-0 grid-cols-2 gap-0.5">
       {services.slice(0, 4).map((service) => (
-        <ServiceIcon key={service.id} service={service} size={12} />
+        <ServiceIcon key={service.id} service={service} size={16} />
       ))}
     </span>
   ) : (
-    <ServiceIcon service={services[0]} size={20} className="shrink-0" />
+    <ServiceIcon service={services[0]} size={26} className="shrink-0" />
   );
 
   // daisyUI's `aura` utility (https://daisyui.com/components/aura/): a
@@ -310,7 +310,7 @@ function GroupButton({
       whileTap={{ scale: 0.96 }}
       whileHover={{ scale: expanded ? 1 : 1.06 }}
       className={`flex cursor-pointer items-center gap-3 rounded-xl transition-colors ${
-        expanded ? "h-10 w-full px-3" : "h-11 w-11 justify-center"
+        expanded ? "h-11 w-full px-2" : "h-11 w-11 justify-center"
       } ${
         isActive
           ? "bg-primary text-primary-content"

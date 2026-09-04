@@ -26,7 +26,7 @@ export function ServiceIcon({ service, size, className }: ServiceIconProps) {
   const glyphSize = Math.round(size * 0.75);
   const inverted = !service.iconBackground && isNearBlack(service.color);
   const bg = service.iconBackground ?? (inverted ? "#f3f4f6" : service.color);
-  const glyphColor = inverted ? service.color : "#fff";
+  const glyphColor = service.iconColor ?? (inverted ? service.color : "#fff");
 
   return (
     <span

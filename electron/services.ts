@@ -56,4 +56,11 @@ export const defaultServices: ServiceDefinition[] = [
     partition: "persist:slack",
     headerStripDomains: ["slack.com", "app.slack.com"],
   },
+  {
+    id: "pantheon",
+    name: "Pantheon",
+    url: "https://dashboard.pantheon.io/workspace",
+    partition: "persist:pantheon",
+    headerStripDomains: ["dashboard.pantheon.io", "pantheon.io"],
+  },
 ];
