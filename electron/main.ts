@@ -381,6 +381,136 @@ function createWindow() {
   return win;
 }
 
+// Google has blocked/penalized authentication inside embedded webviews since
+// 2021 ("This browser or app may not be secure") — confirmed via a spike
+// (see memory: project_google_login_friction) that a plain top-level
+// BrowserWindow is NOT subject to that block, and since it shares the
+// service's own partition, the session cookie Google sets lands directly
+// where the real <webview> needs it — no cookie extraction/transfer, no
+// system-browser handoff, no manual copy-paste step for the user.
+//
+// Hostnames Google's own auth/verification/consent flow can bounce through
+// before landing back on the real destination site. Once a navigation in the
+// auth window lands OUTSIDE this set, the flow is done (success or the user
+// backed out) and the window closes itself.
+const GOOGLE_AUTH_HOSTS = new Set([
+  "accounts.google.com",
+  "myaccount.google.com",
+]);
+
+function isGoogleAuthUrl(url: string): boolean {
+  try {
+    return GOOGLE_AUTH_HOSTS.has(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function hostnameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+// Not every navigation into GOOGLE_AUTH_HOSTS means "the user needs to log
+// in" — Google's own properties periodically ping accounts.google.com in the
+// background to keep session cookies in sync across *.google.com subdomains,
+// and that also comes through here as a real top-level will-navigate. Those
+// pings resolve on their own in well under a second, with nothing for a
+// human to do. Showing a window (and reloading the source webview) for every
+// one of those was the actual bug found by hand: Gmail did one periodically,
+// which produced a visible popup-flash + reload loop even though the session
+// was never actually stale. So the window starts hidden, and only surfaces
+// (and only triggers a webview reload once it's done) if it's still sitting
+// on a Google auth host after a short grace period — i.e. it's actually
+// waiting on password/2FA/consent input, not a silent sync.
+const AUTH_WINDOW_SHOW_DELAY_MS = 700;
+
+interface GoogleAuthWindowState {
+  win: BrowserWindow;
+  shown: boolean;
+  showTimer: ReturnType<typeof setTimeout>;
+}
+
+// One auth window per partition at a time — reusing an existing one instead
+// of stacking a second avoids two competing logins for the same service
+// (e.g. two tabs of the same site both redirecting to Google at once).
+const googleAuthWindows = new Map<string, GoogleAuthWindowState>();
+
+function showGoogleAuthWindow(state: GoogleAuthWindowState) {
+  clearTimeout(state.showTimer);
+  state.shown = true;
+  state.win.show();
+  state.win.focus();
+}
+
+function openGoogleAuthWindow(partition: string, authUrl: string) {
+  const existing = googleAuthWindows.get(partition);
+  if (existing && !existing.win.isDestroyed()) {
+    existing.win.loadURL(authUrl);
+    // A second trigger while one is already in flight for this partition —
+    // whatever grace period was running, show it now rather than keep
+    // guessing; a repeat is itself a signal something's actually stuck.
+    showGoogleAuthWindow(existing);
+    return;
+  }
+
+  const win = new BrowserWindow({
+    width: 480,
+    height: 680,
+    title: "Iniciar sesión con Google",
+    parent: mainWindow ?? undefined,
+    autoHideMenuBar: true,
+    show: false,
+    webPreferences: { partition },
+  });
+
+  const state: GoogleAuthWindowState = {
+    win,
+    shown: false,
+    // Not every navigation into GOOGLE_AUTH_HOSTS means "the user needs to
+    // log in" — Google's own properties periodically ping accounts.google.com
+    // in the background to keep session cookies in sync across *.google.com
+    // subdomains, and that also comes through here as a real top-level
+    // will-navigate. Those pings resolve on their own in well under a
+    // second, with nothing for a human to do. Showing a window (and
+    // reloading the source webview) for every one of those was the actual
+    // bug found by hand: Gmail did one periodically, which produced a
+    // visible popup-flash + reload loop even though the session was never
+    // actually stale. So the window starts hidden, and only surfaces (and
+    // only triggers a webview reload once it's done) if it's still sitting
+    // on a Google auth host after this grace period — i.e. it's actually
+    // waiting on password/2FA/consent input, not a silent sync.
+    showTimer: setTimeout(() => {
+      if (!win.isDestroyed()) showGoogleAuthWindow(state);
+    }, AUTH_WINDOW_SHOW_DELAY_MS),
+  };
+  googleAuthWindows.set(partition, state);
+  win.on("closed", () => {
+    clearTimeout(state.showTimer);
+    if (googleAuthWindows.get(partition) === state) googleAuthWindows.delete(partition);
+  });
+
+  // The auth flow can involve several full navigations (identifier -> 2FA ->
+  // consent -> redirect back). Only act once it leaves Google's auth hosts —
+  // that's the moment the destination site (Gmail, or a third party's own
+  // OAuth callback) has actually set its session cookie in this partition.
+  win.webContents.on("did-navigate", (_event, url) => {
+    const host = hostnameOf(url);
+    if (!host || GOOGLE_AUTH_HOSTS.has(host)) return;
+    clearTimeout(state.showTimer);
+    // Only a flow the user actually saw/interacted with warrants reloading
+    // the webview — a sync ping that never became visible didn't touch a
+    // stale session, so there's nothing there for the webview to pick up.
+    if (state.shown) mainWindow?.webContents.send("google-auth-completed", { partition });
+    win.close();
+  });
+
+  win.loadURL(authUrl);
+}
+
 function createTray(win: BrowserWindow) {
   const iconPath = path.join(__dirname, "../build/tray-icon.png");
   if (!fs.existsSync(iconPath)) {
@@ -529,6 +659,24 @@ app.whenReady().then(async () => {
       (s) => session.fromPartition(s.partition) === contents.session,
     );
 
+    // Redirect any top-level navigation into Google's login/verification/
+    // consent flow (accounts.google.com) out of the <webview> and into a
+    // real top-level BrowserWindow sharing this same partition — see
+    // openGoogleAuthWindow above for why. Covers both a service's own direct
+    // Google login (Gmail) and a third party's "Continue with Google" button:
+    // in both cases the URL Chromium was about to navigate to already
+    // carries whatever client_id/redirect_uri/state the flow needs, so it's
+    // reused as-is rather than reconstructed.
+    if (service) {
+      const handleGoogleAuthNavigation = (event: Electron.Event, url: string) => {
+        if (!isGoogleAuthUrl(url)) return;
+        event.preventDefault();
+        openGoogleAuthWindow(service.partition, url);
+      };
+      contents.on("will-navigate", handleGoogleAuthNavigation);
+      contents.on("will-redirect", handleGoogleAuthNavigation);
+    }
+
     // A page inside a <webview> asking for a popup (window.open, target=_blank)
     // gets silently dropped by Electron unless explicitly handled. Deny the
     // real popup and hand the URL to the renderer instead, which shows it in
@@ -668,6 +816,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("get-webview-preload-path", () =>
     pathToFileURL(path.join(__dirname, "webview-preload.js")).toString(),
   );
+
 
   ipcMain.on("show-notification", (_event, payload: NotificationPayload) => {
     notificationQueue.push(payload);

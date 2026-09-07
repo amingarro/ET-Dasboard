@@ -64,6 +64,10 @@ export interface Note {
   type: NoteType;
   color: string;
   pinned: boolean;
+  // Optional, not `boolean`: notes written before this field existed have no
+  // `locked` key on disk at all (one flat JSON file per note, no migration
+  // step) — every read site treats a missing value as `false` (unlocked).
+  locked?: boolean;
   bodyHtml: string;
   checklist: NoteChecklistItem[];
   deadline: string | null;
@@ -105,6 +109,7 @@ declare global {
       checkForUpdates: () => Promise<UpdateCheckResult>;
       openExternal: (url: string) => void;
       onWebviewPopup: (callback: (payload: { url: string; partition: string }) => void) => () => void;
+      onGoogleAuthCompleted: (callback: (payload: { partition: string }) => void) => () => void;
       downloadUpdate: () => Promise<{ error: string | null }>;
       relaunchApp: () => void;
       onUpdateDownloadProgress: (callback: (percent: number) => void) => () => void;

@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Bold, Check, Image as ImageIcon, Italic, List, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Bold, Check, Image as ImageIcon, Italic, Languages, List, Lock, LockOpen, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { DeleteNoteModal } from "./DeleteNoteModal";
 import { NoteColorPicker } from "./NoteColorPicker";
 import { RichTextEditor, type RichTextEditorHandle } from "./RichTextEditor";
 import { DatePickerPopover } from "./DatePickerPopover";
 import { getNoteColorClassName, noteCheckboxStyle } from "./colors";
+import { splitNoteBody } from "./noteUtils";
+import { translateHtml, translateText } from "@/lib/translate";
 import type { Note, NoteChecklistItem } from "@/types/electron-api";
 
 const AUTOSAVE_DELAY_MS = 3000;
@@ -45,6 +47,7 @@ export function NoteEditorModal({
   const [deadline, setDeadline] = useState<string | null>(initialNote.deadline);
   const [bodyHtml, setBodyHtml] = useState(initialNote.bodyHtml);
   const [checklist, setChecklist] = useState<NoteChecklistItem[]>(initialNote.checklist);
+  const [locked, setLocked] = useState(initialNote.locked ?? false);
   const [newItemText, setNewItemText] = useState("");
   const [hideCompleted, setHideCompleted] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -54,6 +57,75 @@ export function NoteEditorModal({
   const colorClassName = getNoteColorClassName(color);
   const type = initialNote.type;
   const richTextRef = useRef<RichTextEditorHandle>(null);
+
+  // Traducción al español (endpoint no oficial de Google Translate), solo
+  // dentro del detalle de la nota — NoteCard.tsx en la grilla principal no la
+  // muestra. Es una vista previa aparte, no editable: no toca title/bodyHtml/
+  // checklist hasta que el usuario pide explícitamente "Reemplazar".
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translation, setTranslation] = useState<{
+    title: string;
+    bodyHtml: string | null; // solo para notas "normal"
+    checklist: Record<string, string> | null; // solo para notas "todo"
+  } | null>(null);
+
+  // Vista previa de la traducción sin las imágenes (ya se ven arriba, en el
+  // contenido original) — mismo split que usa NoteCard.tsx.
+  const translatedPreviewHtml = useMemo(
+    () => (translation?.bodyHtml ? splitNoteBody(translation.bodyHtml).textHtml : ""),
+    [translation],
+  );
+
+  async function handleToggleTranslation() {
+    if (showTranslation) {
+      setShowTranslation(false);
+      return;
+    }
+    if (translation) {
+      setShowTranslation(true);
+      return;
+    }
+    setIsTranslating(true);
+    try {
+      const [translatedTitle, translatedBodyHtml, translatedChecklist] = await Promise.all([
+        translateText(title),
+        type === "normal" ? translateHtml(bodyHtml) : Promise.resolve(null),
+        type === "todo"
+          ? Promise.all(checklist.map((item) => translateText(item.text))).then((texts) =>
+              Object.fromEntries(checklist.map((item, i) => [item.id, texts[i]])),
+            )
+          : Promise.resolve(null),
+      ]);
+      setTranslation({ title: translatedTitle, bodyHtml: translatedBodyHtml, checklist: translatedChecklist });
+      setShowTranslation(true);
+    } catch (err) {
+      console.error("No se pudo traducir la nota", err);
+    } finally {
+      setIsTranslating(false);
+    }
+  }
+
+  function handleReplaceWithTranslation() {
+    if (!translation) return;
+    const patch: Partial<Note> = { title: translation.title };
+    setTitle(translation.title);
+    if (translation.bodyHtml) {
+      patch.bodyHtml = translation.bodyHtml;
+      setBodyHtml(translation.bodyHtml);
+    }
+    if (translation.checklist) {
+      const nextChecklist = checklist.map((item) => ({
+        ...item,
+        text: translation.checklist![item.id] ?? item.text,
+      }));
+      patch.checklist = nextChecklist;
+      setChecklist(nextChecklist);
+    }
+    commit(patch);
+    setTranslation(null);
+    setShowTranslation(false);
+  }
 
   const pendingRef = useRef<Note | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,7 +164,7 @@ export function NoteEditorModal({
 
   function commit(patch: Partial<Note>) {
     // updatedAt is stamped by saveNote() itself at actual save time, not here.
-    const next: Note = { ...initialNote, title, color, deadline, bodyHtml, checklist, ...patch };
+    const next: Note = { ...initialNote, title, color, deadline, bodyHtml, checklist, locked, ...patch };
     scheduleSave(next);
   }
 
@@ -116,6 +188,12 @@ export function NoteEditorModal({
     commit({ bodyHtml: value });
   }
 
+  function handleToggleLock() {
+    const value = !locked;
+    setLocked(value);
+    commit({ locked: value });
+  }
+
   function isUntouched(): boolean {
     return (
       title === initialNote.title &&
@@ -135,8 +213,10 @@ export function NoteEditorModal({
     // note without typing anything would otherwise leave a stray empty
     // "NUEVA NOTA" sitting in the list — worth cleaning up automatically.
     // Gated on isNew: an EXISTING note opened just to read it and closed
-    // unchanged must never be deleted just because nothing changed.
-    if (isNew && isUntouched()) {
+    // unchanged must never be deleted just because nothing changed. Also
+    // gated on !locked: a note locked right after creation, before typing
+    // anything, must not be swept away by this cleanup either.
+    if (isNew && isUntouched() && !locked) {
       onDelete(initialNote.id);
     } else {
       flush();
@@ -179,6 +259,7 @@ export function NoteEditorModal({
   }
 
   function handleConfirmDelete() {
+    if (locked) return; // el botón que abre esta confirmación ya está disabled — defensa extra
     onDelete(initialNote.id);
     setConfirmingDelete(false);
     onClose();
@@ -209,6 +290,14 @@ export function NoteEditorModal({
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold">Editar nota</h3>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                title={locked ? "Desbloquear (permite borrar)" : "Bloquear (evita borrar)"}
+                onClick={handleToggleLock}
+                className={`btn btn-sm btn-circle ${locked ? "btn-active" : "btn-soft"}`}
+              >
+                {locked ? <Lock size={16} /> : <LockOpen size={16} />}
+              </button>
               <NoteColorPicker color={color} onChange={handleColorChange} />
               <button type="button" className="btn btn-soft btn-sm btn-circle" onClick={handleClose}>
                 <X size={18} />
@@ -224,9 +313,29 @@ export function NoteEditorModal({
             onChange={(e) => handleTitleChange(e.target.value)}
           />
 
-          <span className="badge badge-soft w-fit font-semibold">
-            {type === "todo" ? "TODO" : "Nota"}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="badge badge-soft w-fit font-semibold">
+              {type === "todo" ? "TODO" : "Nota"}
+            </span>
+            <button
+              type="button"
+              onClick={handleToggleTranslation}
+              disabled={isTranslating}
+              // currentColor, no text-primary: text-primary es un color fijo
+              // del tema que no tiene en cuenta el fg/bg propio de cada
+              // .note-color-* (ver NoteCard.tsx) — con notas de fondo oscuro
+              // quedaba casi ilegible. bg-current/10 es el mismo tratamiento
+              // que usan el botón de fijar y los demás controles de la nota.
+              className="flex w-fit cursor-pointer items-center gap-1.5 rounded-lg bg-current/10 px-2 py-1 text-xs font-semibold hover:bg-current/15 disabled:cursor-wait disabled:opacity-60"
+            >
+              {isTranslating ? (
+                <span className="loading loading-spinner loading-xs" />
+              ) : (
+                <Languages size={13} />
+              )}
+              {showTranslation ? "Ocultar traducción" : "Mostrar traducción"}
+            </button>
+          </div>
 
           {type === "normal" ? (
             <>
@@ -287,6 +396,26 @@ export function NoteEditorModal({
                 placeholder="Escribí algo…"
                 onViewImage={onViewImage}
               />
+
+              {showTranslation && translation && (
+                <div className="flex flex-col gap-1.5 rounded-xl border border-dashed border-base-content/15 bg-base-300 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold tracking-wide uppercase opacity-50">Traducción</span>
+                    <button
+                      type="button"
+                      className="btn btn-soft btn-xs font-semibold"
+                      onClick={handleReplaceWithTranslation}
+                    >
+                      Reemplazar
+                    </button>
+                  </div>
+                  {/* No editable: es solo la traducción, no el contenido real de la nota. */}
+                  <div
+                    className="text-sm opacity-80 [&_ul]:list-disc [&_ul]:pl-5"
+                    dangerouslySetInnerHTML={{ __html: translatedPreviewHtml }}
+                  />
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -300,6 +429,9 @@ export function NoteEditorModal({
                 color={color}
                 hideCompleted={hideCompleted}
                 newItemText={newItemText}
+                showTranslation={showTranslation}
+                translatedItems={translation?.checklist ?? null}
+                onReplaceTranslation={handleReplaceWithTranslation}
                 onToggleAll={toggleAllChecklistItems}
                 onToggleHideCompleted={() => setHideCompleted((v) => !v)}
                 onRemoveCompleted={removeCompletedChecklistItems}
@@ -313,6 +445,8 @@ export function NoteEditorModal({
 
           <button
             type="button"
+            title={locked ? "Nota bloqueada — desbloqueala con el candado de arriba para poder borrarla" : undefined}
+            disabled={locked}
             className="btn btn-soft btn-error btn-sm w-fit gap-2"
             onClick={() => setConfirmingDelete(true)}
           >
@@ -340,6 +474,11 @@ interface ChecklistEditorProps {
   color: string;
   hideCompleted: boolean;
   newItemText: string;
+  // Traducción de cada ítem (id -> texto traducido), solo para mostrar — no
+  // reemplaza checklist hasta que se toca "Reemplazar".
+  showTranslation: boolean;
+  translatedItems: Record<string, string> | null;
+  onReplaceTranslation: () => void;
   onToggleAll: () => void;
   onToggleHideCompleted: () => void;
   onRemoveCompleted: () => void;
@@ -354,6 +493,9 @@ function ChecklistEditor({
   color,
   hideCompleted,
   newItemText,
+  showTranslation,
+  translatedItems,
+  onReplaceTranslation,
   onToggleAll,
   onToggleHideCompleted,
   onRemoveCompleted,
@@ -400,6 +542,11 @@ function ChecklistEditor({
         >
           Eliminar marcados
         </button>
+        {showTranslation && translatedItems && (
+          <button type="button" onClick={onReplaceTranslation} className="btn btn-soft btn-xs font-semibold">
+            Reemplazar
+          </button>
+        )}
       </div>
 
       {checklist.length > 0 && (
@@ -418,30 +565,50 @@ function ChecklistEditor({
 
       <div className="flex flex-col">
         {visibleChecklist.map((item) => (
-          <div key={item.id} className="group flex items-center gap-2.5 py-1.5">
-            <input
-              type="checkbox"
-              className="checkbox checkbox-sm"
-              checked={item.done}
-              onChange={(e) => onUpdateItem(item.id, { done: e.target.checked })}
-              style={noteCheckboxStyle(color)}
-            />
-            <input
-              type="text"
-              value={item.text}
-              onChange={(e) => onUpdateItem(item.id, { text: e.target.value })}
-              className={`input input-sm input-ghost flex-1 px-1 ${
-                item.done ? "opacity-50 line-through" : ""
-              }`}
-            />
-            <button
-              type="button"
-              title="Borrar ítem"
-              onClick={() => onRemoveItem(item.id)}
-              className="cursor-pointer rounded p-1 text-base-content/30 opacity-0 hover:bg-base-300 hover:text-error group-hover:opacity-100"
-            >
-              <X size={14} />
-            </button>
+          <div key={item.id} className="flex flex-col">
+            <div className="group flex items-start gap-2.5 py-1.5">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm mt-1 shrink-0"
+                checked={item.done}
+                onChange={(e) => onUpdateItem(item.id, { done: e.target.checked })}
+                style={noteCheckboxStyle(color)}
+              />
+              <textarea
+                rows={1}
+                value={item.text}
+                onChange={(e) => onUpdateItem(item.id, { text: e.target.value })}
+                onKeyDown={(e) => {
+                  // El ítem es de una sola línea lógica — el wrap es visual
+                  // (field-sizing: content), Enter no debe insertar un salto.
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                }}
+                // field-sizing: content hace que crezca en alto con el texto
+                // en vez de forzarlo a una sola línea con overflow oculto.
+                style={{ fieldSizing: "content" } as CSSProperties}
+                className={`textarea textarea-ghost min-h-0 flex-1 resize-none px-1 py-1 leading-normal ${
+                  item.done ? "opacity-50 line-through" : ""
+                }`}
+              />
+              <button
+                type="button"
+                title="Borrar ítem"
+                onClick={() => onRemoveItem(item.id)}
+                className="mt-1 shrink-0 cursor-pointer rounded p-1 text-base-content/30 opacity-0 hover:bg-base-300 hover:text-error group-hover:opacity-100"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            {/* Traducción del ítem, no editable — solo vista previa hasta "Reemplazar". */}
+            {showTranslation && translatedItems?.[item.id] && (
+              <div className="ml-7 flex items-start gap-1.5 rounded-md bg-base-300 px-2 py-1 text-xs italic opacity-70">
+                <span className="shrink-0">↳</span>
+                <span>{translatedItems[item.id]}</span>
+              </div>
+            )}
           </div>
         ))}
       </div>

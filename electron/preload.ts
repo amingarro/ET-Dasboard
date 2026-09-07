@@ -13,6 +13,16 @@ interface NotificationPayload {
 contextBridge.exposeInMainWorld("electronAPI", {
   platform: process.platform,
   getWebviewPreloadPath: () => ipcRenderer.invoke("get-webview-preload-path"),
+  // Fired when a Google login/verification flow opened in the separate auth
+  // BrowserWindow (see main.ts's openGoogleAuthWindow) finishes — the
+  // matching <webview> should reload to pick up the session cookie that just
+  // landed in its partition.
+  onGoogleAuthCompleted: (callback: (payload: { partition: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { partition: string }) =>
+      callback(payload);
+    ipcRenderer.on("google-auth-completed", listener);
+    return () => ipcRenderer.removeListener("google-auth-completed", listener);
+  },
 
   // Main window -> main process: a webview wants to show a notification.
   showNotification: (payload: NotificationPayload) => ipcRenderer.send("show-notification", payload),

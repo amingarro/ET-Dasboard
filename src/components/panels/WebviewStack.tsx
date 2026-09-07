@@ -436,6 +436,19 @@ export function WebviewStack({ onLoadingChange }: WebviewStackProps) {
     [state.services],
   );
 
+  // A Google login that main.ts redirected out of a <webview> and into its
+  // own BrowserWindow (see main.ts's openGoogleAuthWindow — this avoids
+  // Google's "This browser or app may not be secure" block on embedded
+  // webviews) just finished. The BrowserWindow shares that service's
+  // partition, so the session cookie already landed there — reload the
+  // webview to pick it up.
+  useEffect(() => {
+    return window.electronAPI.onGoogleAuthCompleted(({ partition }) => {
+      const service = enabledServices.find((s) => s.partition === partition);
+      if (service) webviewRefs.current[service.id]?.reload();
+    });
+  }, [enabledServices]);
+
   const activeGroup = state.layout.groups.find((g) => g.id === state.layout.activeGroupId);
   const isSplit = Boolean(activeGroup && activeGroup.serviceIds.length > 1);
   const panelIds = activeGroup?.serviceIds ?? [];

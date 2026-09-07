@@ -17,6 +17,11 @@ export interface Note {
   type: NoteType;
   color: string;
   pinned: boolean;
+  // Optional — see the same field on the renderer-side Note type
+  // (src/types/electron-api.d.ts) for why: pre-existing note files on disk
+  // don't have this key at all, and this store never rewrites files it
+  // isn't asked to.
+  locked?: boolean;
   bodyHtml: string;
   checklist: NoteChecklistItem[];
   deadline: string | null;

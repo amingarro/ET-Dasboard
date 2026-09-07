@@ -2,6 +2,14 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.24] - 2026-09-07
+
+- Corregido: iniciar sesión con Google dentro de Gmail o con "Continuar con Google" en cualquier otro servicio ya no queda bloqueado con el aviso "este navegador o app puede no ser seguro" — ahora se abre en una ventana propia y, al terminar, el servicio se recarga solo ya con la sesión iniciada.
+- Notas: nuevo botón para traducir una nota al español desde su detalle, con la traducción mostrada aparte del texto original y un botón para reemplazarlo si te sirve.
+- Notas: nuevo botón de candado en el detalle de una nota para bloquearla y evitar borrarla por accidente; la tarjeta en la lista principal muestra si está bloqueada.
+- Notas: nueva barra de filtros (con fecha límite, listas de tareas, fijadas, bloqueadas) que se pueden combinar entre sí para acotar la lista.
+- Notas: las notas con mucho texto o con checklists largas ya no estiran la tarjeta sin límite — ahora tienen un alto máximo y scroll interno.
+
 ## [0.1.23] - 2026-09-04
 
 - Pantheon se suma al dock como un servicio más, con su logo real y sus colores de marca (insignia amarilla, ícono negro).

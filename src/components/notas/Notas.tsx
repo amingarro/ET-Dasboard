@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, ListChecks, Palette, X } from "lucide-react";
+import { CalendarDays, ListChecks, Lock, Palette, Pin, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { DriveSyncButton } from "@/components/DriveSyncButton";
 import { useNotes } from "@/lib/notes";
@@ -16,6 +16,15 @@ import type { Note, NoteType } from "@/types/electron-api";
 interface NotasProps {
   onClose: () => void;
 }
+
+type NoteFilter = "deadline" | "todo" | "pinned" | "locked";
+
+const FILTERS: { key: NoteFilter; label: string; icon: typeof CalendarDays }[] = [
+  { key: "deadline", label: "Fecha límite", icon: CalendarDays },
+  { key: "todo", label: "Listas", icon: ListChecks },
+  { key: "pinned", label: "Fijadas", icon: Pin },
+  { key: "locked", label: "Bloqueadas", icon: Lock },
+];
 
 export function Notas({ onClose }: NotasProps) {
   const { notes, loading, refreshToken, saveNote, deleteNote } = useNotes();
@@ -54,8 +63,30 @@ export function Notas({ onClose }: NotasProps) {
     saveNote({ ...note, pinned: !note.pinned });
   }
 
-  const pinned = notes.filter((n) => n.pinned);
-  const unpinned = notes.filter((n) => !n.pinned);
+  // Cada filtro activo suma una condición AND — combinables entre sí (p. ej.
+  // "Listas" + "Bloqueadas" muestra solo TODOs bloqueados).
+  const [activeFilters, setActiveFilters] = useState<Set<NoteFilter>>(new Set());
+
+  function toggleFilter(filter: NoteFilter) {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(filter)) next.delete(filter);
+      else next.add(filter);
+      return next;
+    });
+  }
+
+  function matchesFilters(note: Note): boolean {
+    if (activeFilters.has("deadline") && !note.deadline) return false;
+    if (activeFilters.has("todo") && note.type !== "todo") return false;
+    if (activeFilters.has("pinned") && !note.pinned) return false;
+    if (activeFilters.has("locked") && !note.locked) return false;
+    return true;
+  }
+
+  const filteredNotes = notes.filter(matchesFilters);
+  const pinned = filteredNotes.filter((n) => n.pinned);
+  const unpinned = filteredNotes.filter((n) => !n.pinned);
 
   function renderGrid(list: Note[]) {
     // CSS multi-column, not CSS grid: a row-based grid forces every card in
@@ -106,7 +137,9 @@ export function Notas({ onClose }: NotasProps) {
               <div>
                 <h2 className="text-xl leading-tight font-bold">Notas</h2>
                 <p className="text-xs leading-tight text-base-content/55">
-                  {notes.length} {notes.length === 1 ? "nota" : "notas"}
+                  {activeFilters.size > 0
+                    ? `${filteredNotes.length} de ${notes.length} ${notes.length === 1 ? "nota" : "notas"}`
+                    : `${notes.length} ${notes.length === 1 ? "nota" : "notas"}`}
                   {pinned.length > 0 &&
                     ` · ${pinned.length} ${pinned.length === 1 ? "fijada" : "fijadas"}`}
                 </p>
@@ -122,44 +155,77 @@ export function Notas({ onClose }: NotasProps) {
 
           <PendingImagesPrompt />
 
-          <div className="flex h-13 max-w-xl items-center gap-2.5 rounded-2xl border border-base-300 bg-base-100 pr-2 pl-5 shadow-sm">
-            <button
-              type="button"
-              className="flex-1 cursor-text text-left text-sm text-base-content/45"
-              onClick={() => createAndOpen("normal")}
-            >
-              Crear una nota…
-            </button>
-            <button
-              type="button"
-              title="Nueva lista TODO"
-              className="btn btn-soft btn-square btn-sm"
-              onClick={() => createAndOpen("todo")}
-            >
-              <ListChecks size={18} />
-            </button>
-            <button
-              type="button"
-              title="Elegir color"
-              className="btn btn-soft btn-square btn-sm"
-              onClick={() => createAndOpen("normal")}
-            >
-              <Palette size={18} />
-            </button>
-            <button
-              type="button"
-              title="Poner fecha límite"
-              className="btn btn-soft btn-square btn-sm"
-              onClick={() => createAndOpen("normal")}
-            >
-              <CalendarDays size={18} />
-            </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex h-13 max-w-xl flex-1 items-center gap-2.5 rounded-2xl border border-base-300 bg-base-100 pr-2 pl-5 shadow-sm">
+              <button
+                type="button"
+                className="flex-1 cursor-text text-left text-sm text-base-content/45"
+                onClick={() => createAndOpen("normal")}
+              >
+                Crear una nota…
+              </button>
+              <button
+                type="button"
+                title="Nueva lista TODO"
+                className="btn btn-soft btn-square btn-sm"
+                onClick={() => createAndOpen("todo")}
+              >
+                <ListChecks size={18} />
+              </button>
+              <button
+                type="button"
+                title="Elegir color"
+                className="btn btn-soft btn-square btn-sm"
+                onClick={() => createAndOpen("normal")}
+              >
+                <Palette size={18} />
+              </button>
+              <button
+                type="button"
+                title="Poner fecha límite"
+                className="btn btn-soft btn-square btn-sm"
+                onClick={() => createAndOpen("normal")}
+              >
+                <CalendarDays size={18} />
+              </button>
+            </div>
+
+            {/* Cada chip suma una condición AND al resto de los activos — ver
+                matchesFilters arriba. */}
+            <div className="flex flex-wrap items-center gap-2">
+              {FILTERS.map(({ key, label, icon: Icon }) => {
+                const active = activeFilters.has(key);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleFilter(key)}
+                    className={`btn btn-sm gap-1.5 font-semibold ${active ? "btn-primary" : "btn-soft"}`}
+                  >
+                    <Icon size={14} />
+                    {label}
+                  </button>
+                );
+              })}
+              {activeFilters.size > 0 && (
+                <button
+                  type="button"
+                  title="Limpiar filtros"
+                  className="btn btn-ghost btn-sm btn-circle"
+                  onClick={() => setActiveFilters(new Set())}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
 
           {loading ? (
             <p className="text-sm text-base-content/50">Cargando…</p>
           ) : notes.length === 0 ? (
             <p className="text-sm text-base-content/50">No hay notas todavía.</p>
+          ) : filteredNotes.length === 0 ? (
+            <p className="text-sm text-base-content/50">Ninguna nota coincide con estos filtros.</p>
           ) : (
             <div className="flex flex-col gap-4">
               {pinned.length > 0 && (

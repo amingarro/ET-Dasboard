@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, type CSSProperties } from "react";
-import { Clock, Pin } from "lucide-react";
+import { Clock, Lock, LockOpen, Pin } from "lucide-react";
 import { getNoteColorClassName, noteCheckboxStyle } from "./colors";
 import { getDeadlineBreakdown, getDeadlineStatus, splitNoteBody } from "./noteUtils";
 import { NoteImageCarousel } from "./NoteImageCarousel";
@@ -64,22 +64,32 @@ export function NoteCard({ note, onOpen, onTogglePin, onToggleChecklistItem, onO
       <div className="card-body gap-2 p-4">
         <div className="flex items-start justify-between gap-2">
           <h3 className="card-title text-base">{note.title}</h3>
-          <button
-            type="button"
-            title={note.pinned ? "Desfijar" : "Fijar"}
-            onClick={(e) => {
-              e.stopPropagation();
-              onTogglePin();
-            }}
-            // bg-current picks up whatever text color this button inherits
-            // (the note's own fg when colored, base-content otherwise) —
-            // always has a background, never a bare floating-line icon.
-            className={`shrink-0 cursor-pointer rounded-lg p-1.5 transition-colors ${
-              note.pinned ? "bg-current/20" : "bg-current/10 hover:bg-current/15"
-            }`}
-          >
-            <Pin size={14} className={note.pinned ? "fill-current" : "opacity-60"} />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Solo indica el estado — el candado se togglea desde el detalle
+                de la nota (NoteEditorModal), no desde acá. */}
+            <span
+              title={note.locked ? "Nota bloqueada" : "Nota desbloqueada"}
+              className={`rounded-lg p-1.5 ${note.locked ? "bg-current/20" : "bg-current/10"}`}
+            >
+              {note.locked ? <Lock size={14} /> : <LockOpen size={14} className="opacity-60" />}
+            </span>
+            <button
+              type="button"
+              title={note.pinned ? "Desfijar" : "Fijar"}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin();
+              }}
+              // bg-current picks up whatever text color this button inherits
+              // (the note's own fg when colored, base-content otherwise) —
+              // always has a background, never a bare floating-line icon.
+              className={`cursor-pointer rounded-lg p-1.5 transition-colors ${
+                note.pinned ? "bg-current/20" : "bg-current/10 hover:bg-current/15"
+              }`}
+            >
+              <Pin size={14} className={note.pinned ? "fill-current" : "opacity-60"} />
+            </button>
+          </div>
         </div>
 
         {note.deadline && <DeadlineBadge deadline={note.deadline} />}
@@ -96,7 +106,9 @@ export function NoteCard({ note, onOpen, onTogglePin, onToggleChecklistItem, onO
               // card's own color from the .note-color-* class above. Tailwind's
               // preflight strips default list styling, restored manually since
               // there's no @tailwindcss/typography plugin.
-              className="text-sm [&_ul]:list-disc [&_ul]:pl-5"
+              // max-h + overflow-y-auto: sin esto una nota larga estira la
+              // card a un alto arbitrario en vez de scrollear su contenido.
+              className="max-h-64 overflow-y-auto pr-1 text-sm [&_ul]:list-disc [&_ul]:pl-5"
               dangerouslySetInnerHTML={{ __html: textHtml }}
             />
           </>
@@ -115,7 +127,8 @@ export function NoteCard({ note, onOpen, onTogglePin, onToggleChecklistItem, onO
                 <span className="font-mono text-[10px] font-bold opacity-60">{progressPct}%</span>
               </div>
             )}
-            <ul className="flex flex-col gap-1.5">
+            {/* Mismo tope de alto + scroll que el cuerpo de una nota "normal" arriba. */}
+            <ul className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
               {note.checklist.map((item) => (
                 <li
                   key={item.id}
