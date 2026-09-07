@@ -14,12 +14,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # check-changelog-version.sh (below) needs to diff against the
+          # commit/branch this push or PR started from — a shallow clone
+          # wouldn't have it.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - run: npm ci
+
+      # Right after every release, CHANGELOG.md's top entry legitimately IS
+      # the version that was just tagged — that's the normal resting state,
+      # not a bug. Only run the check when this push/PR actually touches
+      # CHANGELOG.md, i.e. someone is adding to it right now; otherwise
+      # every single CI run between releases would fail for no reason.
+      - name: Check changelog version
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+            BASE="HEAD~1"
+          fi
+          if git diff --name-only "$BASE" HEAD -- CHANGELOG.md | grep -q .; then
+            npm run check:changelog
+          else
+            echo "CHANGELOG.md unchanged since $BASE — skipping."
+          fi
 
       - run: npm run lint
 

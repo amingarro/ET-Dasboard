@@ -15,7 +15,8 @@
     "start": "next start",
     "lint": "eslint",
     "dist": "npm run build && electron-builder",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:changelog": "bash scripts/check-changelog-version.sh"
   },
   "build": {
     "appId": "com.mausedar.et-dashboard",
