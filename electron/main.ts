@@ -19,7 +19,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { defaultServices } from "./services";
-import { getStore, type StoreSchema } from "./store";
+import { getStore, type AppStore, type StoreSchema, type WindowState } from "./store";
 import { deleteNote, listNotes, saveNote, type Note } from "./notesStore";
 import { deleteBirthday, listBirthdays, saveBirthday, type Birthday } from "./birthdaysStore";
 import { downloadPendingImages, syncNotes, type SyncStatus } from "./driveSync";
@@ -87,6 +87,30 @@ if (!app.requestSingleInstanceLock()) {
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+
+// SIGTERM/SIGINT mean the desktop session itself is ending (logout, reboot,
+// shutdown) — systemd tears down the whole user session, including Xwayland
+// (this app runs forced onto it via --ozone-platform=x11, see the Wayland/
+// GNOME tray saga elsewhere in this file). Without this, the app just sits
+// resident in the tray (by design — see the close handler below) while that
+// teardown races ahead of it: confirmed via an apport crash report
+// (/var/crash/_opt_ET Dashboard_et-dashboard-bin.*.crash) that gnome-shell
+// logs "Connection to xwayland lost" the instant before Chromium's browser
+// process, still alive and touching that X connection, hits an internal
+// CHECK failure and self-traps (a `ud2` instruction, reported by the OS as
+// SIGILL) — not a real illegal-instruction bug, a deliberate Chromium abort
+// hit because Xwayland vanished out from under a process nothing told to
+// leave yet. Quitting immediately here starts Electron's own orderly
+// shutdown as soon as the session starts ending, instead of staying parked
+// in the tray until forcibly killed after Xwayland is already gone.
+process.on("SIGTERM", () => {
+  isQuitting = true;
+  app.quit();
+});
+process.on("SIGINT", () => {
+  isQuitting = true;
+  app.quit();
+});
 
 interface NotificationPayload {
   serviceId: string;
@@ -337,7 +361,34 @@ function menuIcon(name: string): Electron.NativeImage | undefined {
   return image;
 }
 
-function createWindow() {
+const DEFAULT_WINDOW_SIZE = { width: 1440, height: 900 };
+
+// A saved position only counts as "found" if the monitor it was on is still
+// connected — comparing against workArea (not the raw display bounds) so a
+// window sitting entirely under an OS taskbar/dock doesn't count as visible
+// either. Any real overlap is enough; this isn't trying to guard against a
+// window that's 95% off-screen, just "the monitor is simply gone".
+function isRectOnAnyDisplay(rect: { x: number; y: number; width: number; height: number }): boolean {
+  return screen.getAllDisplays().some((display) => {
+    const area = display.workArea;
+    const overlapX = Math.min(rect.x + rect.width, area.x + area.width) - Math.max(rect.x, area.x);
+    const overlapY = Math.min(rect.y + rect.height, area.y + area.height) - Math.max(rect.y, area.y);
+    return overlapX > 0 && overlapY > 0;
+  });
+}
+
+// No x/y in the returned bounds means "let Electron center it" — that's
+// what happens both on a fresh install (windowState still null) and when
+// the saved monitor is no longer connected, which is exactly the primary-
+// display fallback this is for.
+function resolveInitialBounds(saved: WindowState | null): { x?: number; y?: number; width: number; height: number } {
+  if (saved && isRectOnAnyDisplay(saved)) {
+    return { x: saved.x, y: saved.y, width: saved.width, height: saved.height };
+  }
+  return { ...DEFAULT_WINDOW_SIZE };
+}
+
+function createWindow(store: AppStore) {
   const iconPath = path.join(__dirname, "../build/icon.png");
   // Passing `icon` as a string to the BrowserWindow constructor doesn't
   // reliably set the X11 _NET_WM_ICON hint under the ozone-platform=x11
@@ -346,9 +397,11 @@ function createWindow() {
   // explicitly below as a second, more direct path to the same hint.
   const appIcon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined;
 
+  const savedState = store.store.windowState;
+  const bounds = resolveInitialBounds(savedState);
+
   const win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    ...bounds,
     title: "ET Dashboard",
     icon: appIcon,
     webPreferences: {
@@ -358,6 +411,16 @@ function createWindow() {
       webviewTag: true,
     },
   });
+
+  // Applied after construction, not as a constructor option — the width/
+  // height above are what a later unmaximize should restore to, and
+  // maximize() itself is what actually shows it full-screen-on-the-monitor.
+  // Only when the saved monitor was actually found: maximizing after a
+  // primary-display fallback would maximize onto a monitor the user's saved
+  // state never said anything about.
+  if (savedState?.isMaximized && isRectOnAnyDisplay(savedState)) {
+    win.maximize();
+  }
 
   if (appIcon && !appIcon.isEmpty()) {
     win.setIcon(appIcon);
@@ -373,12 +436,34 @@ function createWindow() {
   // Closing the window minimizes to the tray instead of quitting — the tray's
   // own "Salir" item (or Cmd/Ctrl+Q) is what actually exits the app.
   win.on("close", (event) => {
-    if (isQuitting) return;
-    event.preventDefault();
-    win.hide();
+    if (!isQuitting) {
+      event.preventDefault();
+      win.hide();
+    }
+    saveWindowState(win, store);
   });
 
+  let saveStateTimer: ReturnType<typeof setTimeout> | null = null;
+  const scheduleSaveWindowState = () => {
+    if (saveStateTimer) clearTimeout(saveStateTimer);
+    saveStateTimer = setTimeout(() => saveWindowState(win, store), 500);
+  };
+  win.on("resize", scheduleSaveWindowState);
+  win.on("move", scheduleSaveWindowState);
+  win.on("maximize", scheduleSaveWindowState);
+  win.on("unmaximize", scheduleSaveWindowState);
+
   return win;
+}
+
+// getNormalBounds() (not getBounds()) — returns the pre-maximized rect
+// regardless of current state, so a maximized window's saved x/y/width/
+// height is always something sane to restore to on unmaximize, or to open
+// at if the saved monitor is gone next launch (see resolveInitialBounds).
+function saveWindowState(win: BrowserWindow, store: AppStore) {
+  if (win.isDestroyed()) return;
+  const { x, y, width, height } = win.getNormalBounds();
+  store.set({ windowState: { x, y, width, height, isMaximized: win.isMaximized() } });
 }
 
 // Google has blocked/penalized authentication inside embedded webviews since
@@ -974,7 +1059,7 @@ app.whenReady().then(async () => {
     mainWindow?.webContents.send("store:changed", newValue);
   });
 
-  mainWindow = createWindow();
+  mainWindow = createWindow(store);
   createTray(mainWindow);
   notificationWindow = createNotificationWindow();
 
@@ -983,7 +1068,7 @@ app.whenReady().then(async () => {
       mainWindow.show();
       mainWindow.focus();
     } else {
-      mainWindow = createWindow();
+      mainWindow = createWindow(store);
     }
   });
 

@@ -22,6 +22,7 @@ const initialState: StoreSchema = {
   },
   driveSyncEnabled: false,
   birthdayNotificationsEnabled: true,
+  windowState: null,
 };
 
 interface StoreContextValue {

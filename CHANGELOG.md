@@ -2,6 +2,11 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.25] - 2026-09-23
+
+- La ventana ahora recuerda su posición, tamaño y si estaba maximizada, y los restaura la próxima vez que abrís la app; si el monitor donde estaba ya no está conectado, vuelve a abrir con el tamaño y la posición por defecto en la pantalla principal en vez de aparecer fuera de la vista.
+- Corregido: la app ya no se cierra de golpe con un error al apagar o reiniciar la computadora mientras sigue abierta en la bandeja del sistema.
+
 ## [0.1.24] - 2026-09-07
 
 - Corregido: iniciar sesión con Google dentro de Gmail o con "Continuar con Google" en cualquier otro servicio ya no queda bloqueado con el aviso "este navegador o app puede no ser seguro" — ahora se abre en una ventana propia y, al terminar, el servicio se recarga solo ya con la sesión iniciada.

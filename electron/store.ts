@@ -25,6 +25,18 @@ export interface LayoutState {
 
 export type DockMode = "expanded" | "compact" | "auto";
 
+// x/y/width/height are always the window's *normal* (non-maximized) bounds
+// — see main.ts's use of win.getNormalBounds() — so un-maximizing or a
+// monitor no longer being found both have a sane rect to fall back to
+// instead of whatever the maximized size happened to be.
+export interface WindowState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isMaximized: boolean;
+}
+
 // "system" asks Chromium to infer from the OS locale (best-effort — see
 // resolveSpellcheckLanguages in main.ts). "es"/"en" pin the Hunspell
 // dictionary explicitly, for when that inference gets it wrong (the bug
@@ -40,6 +52,10 @@ export interface StoreSchema {
   layout: LayoutState;
   driveSyncEnabled: boolean;
   birthdayNotificationsEnabled: boolean;
+  // null until the window has been moved/resized/closed at least once — a
+  // fresh install falls back to createWindow()'s own default size, centered
+  // on the primary display.
+  windowState: WindowState | null;
 }
 
 function soloGroup(serviceId: string): ViewGroup {
@@ -64,6 +80,7 @@ const defaultStoreValues: StoreSchema = {
   },
   driveSyncEnabled: false,
   birthdayNotificationsEnabled: true,
+  windowState: null,
 };
 
 export interface AppStore {
@@ -157,6 +174,9 @@ export async function getStore(): Promise<AppStore> {
     }
     if (current.birthdayNotificationsEnabled === undefined) {
       storeInstance.set({ birthdayNotificationsEnabled: true });
+    }
+    if (current.windowState === undefined) {
+      storeInstance.set({ windowState: null });
     }
 
     // electron-store doesn't backfill missing fields on objects already

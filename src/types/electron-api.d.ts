@@ -22,6 +22,17 @@ export type DockMode = "expanded" | "compact" | "auto";
 
 export type SpellcheckLanguage = "es" | "en" | "system";
 
+// Main-process-only in practice (window geometry isn't edited from the
+// renderer) — mirrored here only because the renderer's store hooks receive
+// the whole StoreSchema object as-is, same as every other field below.
+export interface WindowState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isMaximized: boolean;
+}
+
 export interface NotificationPayload {
   serviceId: string;
   title: string;
@@ -45,6 +56,7 @@ export interface StoreSchema {
   layout: LayoutState;
   driveSyncEnabled: boolean;
   birthdayNotificationsEnabled: boolean;
+  windowState: WindowState | null;
 }
 
 // Notes are NOT part of StoreSchema/electron-store — each note is its own
