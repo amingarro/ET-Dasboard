@@ -411,8 +411,15 @@ export function NoteEditorModal({
                   </div>
                   {/* No editable: es solo la traducción, no el contenido real de la nota. */}
                   <div
-                    className="text-sm opacity-80 [&_ul]:list-disc [&_ul]:pl-5"
+                    className="note-body text-sm opacity-80 [&_ul]:list-disc [&_ul]:pl-5"
                     dangerouslySetInnerHTML={{ __html: translatedPreviewHtml }}
+                    onClick={(e) => {
+                      const link = (e.target as HTMLElement).closest("a");
+                      if (!link) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.electronAPI.openExternal(link.href);
+                    }}
                   />
                 </div>
               )}

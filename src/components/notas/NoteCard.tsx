@@ -108,8 +108,19 @@ export function NoteCard({ note, onOpen, onTogglePin, onToggleChecklistItem, onO
               // there's no @tailwindcss/typography plugin.
               // max-h + overflow-y-auto: sin esto una nota larga estira la
               // card a un alto arbitrario en vez de scrollear su contenido.
-              className="max-h-64 overflow-y-auto pr-1 text-sm [&_ul]:list-disc [&_ul]:pl-5"
+              className="note-body max-h-64 overflow-y-auto pr-1 text-sm [&_ul]:list-disc [&_ul]:pl-5"
               dangerouslySetInnerHTML={{ __html: textHtml }}
+              onClick={(e) => {
+                // No es contenteditable — acá un click en un link sí debe
+                // abrirlo, sin necesidad de Ctrl (a diferencia del editor,
+                // ver RichTextEditor.tsx). stopPropagation para que no
+                // dispare también el onOpen del card entero.
+                const link = (e.target as HTMLElement).closest("a");
+                if (!link) return;
+                e.preventDefault();
+                e.stopPropagation();
+                window.electronAPI.openExternal(link.href);
+              }}
             />
           </>
         ) : (

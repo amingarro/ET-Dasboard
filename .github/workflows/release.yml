@@ -31,6 +31,25 @@ jobs:
       - name: Push version bump and tag
         run: git push --follow-tags origin HEAD:main
 
+      # Create the release up front, as a draft, before the build matrix
+      # starts. Otherwise each of the 3 parallel electron-builder runs finds
+      # no release and creates its own, all with the same tag (v0.1.26 ended
+      # up split across two releases, Windows/macOS files unreachable).
+      # electron-builder uploads into an existing draft instead of creating
+      # one; the publish job below makes it public once every build passed.
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.bump.outputs.new_tag }}"
+          VERSION="${TAG#v}"
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          gh release create "$TAG" --draft --title "$VERSION" --notes-file release-notes.md
+
   build:
     needs: bump-version
     strategy:
@@ -55,3 +74,12 @@ jobs:
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: [bump-version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ needs.bump-version.outputs.new_tag }}" --repo "${{ github.repository }}" --draft=false --latest

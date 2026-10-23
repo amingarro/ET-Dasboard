@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { splitNoteBody } from "./noteUtils";
+import { buildLinkifiedFragment, linkifyHtml, splitNoteBody } from "./noteUtils";
 
 interface RichTextEditorProps {
   value: string;
@@ -47,6 +47,22 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     }
   }, [value]);
 
+  // Migración de URLs sueltas a <a> — una sola vez al montar (= al abrir esta
+  // nota), no en cada cambio de `value`: si corriera en cada tecla, cualquier
+  // nota que ya tenga una URL reescribiría todo el contenteditable (y
+  // perdería el cursor) con cada carácter tipeado en cualquier parte de la
+  // nota. Cubre notas guardadas antes de que handlePaste linkificara solo.
+  useEffect(() => {
+    const editor = ref.current;
+    if (!editor) return;
+    const linked = linkifyHtml(editor.innerHTML);
+    if (linked !== editor.innerHTML) {
+      editor.innerHTML = linked;
+      onChange(linked);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleInsertImageClick() {
     const selection = window.getSelection();
     // Solo pisa la referencia si hay una selección realmente válida ahora —
@@ -74,7 +90,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const file = e.target.files?.[0];
     e.target.value = ""; // permite elegir el mismo archivo de nuevo más adelante
     if (!file) return;
+    await insertImageFile(file);
+  }
 
+  async function insertImageFile(file: File) {
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -126,8 +145,72 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     onChange(editor.innerHTML);
   }
 
+  // Sin esto, pegar copia el formato de origen (fuente/color/tamaño del sitio
+  // de donde se copió) en vez de texto plano — lo único que se quiere acá.
+  // Las imágenes pegadas (p. ej. una captura de pantalla) se guardan a disco
+  // igual que "Insertar imagen", en vez de insertarse como <img> con un
+  // data: URL inline (que no queda reconocido por splitNoteBody/note-image://).
+  async function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+
+    const imageFile = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
+    if (imageFile) {
+      await insertImageFile(imageFile);
+      return;
+    }
+
+    insertTextWithLinks(e.clipboardData.getData("text/plain"));
+  }
+
+  // Reemplaza la selección actual (o inserta al final) con texto plano cuyas
+  // URLs sueltas ya vienen envueltas en <a> — vía Range, no
+  // document.execCommand("insertHTML", ...), por la misma razón documentada
+  // en insertImageFile: insertHTML depende de un rango realmente activo
+  // "dentro" del editor y eso no es confiable acá tampoco.
+  function insertTextWithLinks(text: string) {
+    const editor = ref.current;
+    if (!editor) return;
+    editor.focus();
+
+    const fragment = buildLinkifiedFragment(text);
+    const lastNode = fragment.lastChild; // capturado antes de insertNode: insertNode vacía el fragment
+
+    const selection = window.getSelection();
+    const range =
+      selection && selection.rangeCount > 0 && editor.contains(selection.anchorNode)
+        ? selection.getRangeAt(0)
+        : null;
+    if (range) {
+      range.deleteContents();
+      range.insertNode(fragment);
+    } else {
+      editor.appendChild(fragment);
+    }
+
+    if (lastNode) {
+      const afterRange = document.createRange();
+      afterRange.setStartAfter(lastNode);
+      afterRange.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(afterRange);
+    }
+
+    onChange(editor.innerHTML);
+  }
+
   function handleEditorClick(e: React.MouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
+
+    // Un click normal en un link mientras se edita solo debe mover el
+    // cursor (comportamiento nativo de contenteditable) — abrirlo requiere
+    // Ctrl/Cmd+clic, como en Google Docs/Notion, para no pelear con la
+    // edición de texto normal.
+    const link = target.closest("a");
+    if (link && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      window.electronAPI.openExternal(link.href);
+      return;
+    }
 
     const deleteButton = target.closest('[data-role="delete-image"]');
     if (deleteButton) {
@@ -159,8 +242,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         contentEditable
         suppressContentEditableWarning
         data-placeholder={placeholder}
-        className="textarea textarea-bordered h-[28rem] w-full overflow-y-auto p-4 text-[15px] leading-relaxed empty:before:text-base-content/40 empty:before:content-[attr(data-placeholder)]"
+        className="note-body textarea textarea-bordered h-[28rem] w-full overflow-y-auto p-4 text-[15px] leading-relaxed empty:before:text-base-content/40 empty:before:content-[attr(data-placeholder)]"
         onInput={(e) => onChange(e.currentTarget.innerHTML)}
+        onPaste={handlePaste}
         onClick={handleEditorClick}
       />
     </div>

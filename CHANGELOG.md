@@ -2,6 +2,14 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.27] - 2026-10-23
+
+- Notas: las direcciones web que escribís o pegás en una nota (las que empiezan con http://, https:// o www.) ahora se convierten solas en links, también en las notas que ya tenías apenas las abrís. En la tarjeta de la lista y en la traducción se abren en el navegador con un click normal; mientras editás la nota se abren con Ctrl+click (Cmd+click en Mac), así un click común sigue sirviendo para ubicar el cursor. Los links toman el color del texto de la nota, así se leen bien sea cual sea el color que elegiste.
+- Notas: pegar texto copiado de otro lado ahora lo pega como texto simple, sin arrastrar las fuentes, colores ni tamaños del sitio de origen.
+- Notas: pegar una imagen (por ejemplo, una captura de pantalla) ahora la inserta en la nota, igual que el botón de insertar imagen.
+- Corregido: la versión anterior no se podía descargar ni actualizar en Windows y Mac porque sus archivos para esas plataformas no quedaron publicados. Esta versión se puede descargar y actualizar normalmente en todas las plataformas e incluye la actualización de seguridad de la versión anterior.
+- Mejoras internas de seguridad y del proceso de publicación.
+
 ## [0.1.26] - 2026-10-23
 
 - Actualización de seguridad del navegador integrado (el motor que carga Gmail, GitHub, Jira y los demás servicios) a su última versión, con correcciones de seguridad de Chromium incluidas, entre ellas una para que las ventanas que se abren desde un link respeten las mismas protecciones de cookies que el resto de la app.

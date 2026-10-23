@@ -300,3 +300,22 @@ body {
 .note-image-delete:hover {
   background: rgba(0, 0, 0, 0.8);
 }
+
+/* Links auto-detectados en el cuerpo de una nota (noteUtils.ts linkifyHtml/
+   buildLinkifiedFragment). color: inherit en vez de un .link-primary de
+   daisyUI (color fijo del tema): una nota puede tener cualquiera de los 10
+   --note-*-fg/bg de arriba como fondo, así que el link tiene que heredar el
+   fg de la nota para seguir siendo legible en todos. */
+.note-body a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
+.note-body a:hover {
+  opacity: 0.75;
+}
+[contenteditable="true"].note-body a {
+  cursor: text;
+}

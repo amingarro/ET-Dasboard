@@ -920,8 +920,16 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("check-for-updates", () => checkForUpdates());
+  // Notes now open links from their own (synced, pasted) HTML through this —
+  // only hand web/mail links to the OS, never file:/custom-protocol URLs.
   ipcMain.on("open-external", (_event, url: string) => {
-    shell.openExternal(url);
+    let protocol: string;
+    try {
+      protocol = new URL(url).protocol;
+    } catch {
+      return;
+    }
+    if (["http:", "https:", "mailto:"].includes(protocol)) shell.openExternal(url);
   });
 
   ipcMain.handle("download-update", async () => {
