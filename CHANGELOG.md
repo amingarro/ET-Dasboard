@@ -2,6 +2,11 @@
 
 Todas las novedades importantes de ET Dashboard, versión por versión.
 
+## [0.1.26] - 2026-10-23
+
+- Actualización de seguridad del navegador integrado (el motor que carga Gmail, GitHub, Jira y los demás servicios) a su última versión, con correcciones de seguridad de Chromium incluidas, entre ellas una para que las ventanas que se abren desde un link respeten las mismas protecciones de cookies que el resto de la app.
+- Mejoras internas y actualizaciones de seguridad de componentes.
+
 ## [0.1.25] - 2026-09-23
 
 - La ventana ahora recuerda su posición, tamaño y si estaba maximizada, y los restaura la próxima vez que abrís la app; si el monitor donde estaba ya no está conectado, vuelve a abrir con el tamaño y la posición por defecto en la pantalla principal en vez de aparecer fuera de la vista.
